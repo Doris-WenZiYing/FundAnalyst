@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>基金分析 — FundLens</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- ── Header（同首頁，可抽成共用元件） ───────────── -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="index.html" class="logo">FundLens</a>
+      <nav class="main-nav">
+        <!-- TODO: 同首頁導覽 -->
+      </nav>
+    </div>
+  </header>
+
+  <!-- ── 基金標題列 ───────────────────────────────── -->
+  <div class="fund-title-bar">
+    <div class="container fund-title-inner">
+      <div>
+        <h1 id="fundName" class="fund-name">—</h1>
+        <!-- TODO: 顯示 基金公司 | 類型 | 風險等級 -->
+        <p id="fundMeta" class="fund-meta"></p>
+      </div>
+      <button id="addToCompareBtn" class="btn btn-outline">
+        ＋ 加入比較
+      </button>
+    </div>
+  </div>
+
+  <main class="container page-main">
+
+    <!-- ── 上半：NAV 圖表 + 基本資訊卡 ─────────────── -->
+    <div class="layout-two-col">
+
+      <!-- NAV 走勢圖 -->
+      <div class="card chart-card">
+        <!-- 期間切換 -->
+        <div class="period-tabs">
+          <button class="period-btn active" data-period="1Y">1Y</button>
+          <button class="period-btn" data-period="3Y">3Y</button>
+          <button class="period-btn" data-period="5Y">5Y</button>
+        </div>
+        <!-- TODO:
+          - 呼叫 GET /funds/<id>/nav?period=3Y
+          - 用 charts.js 的 drawNavChart() 繪製折線圖
+          - 切換期間時重新 fetch 並 redraw
+        -->
+        <canvas id="navChart"></canvas>
+      </div>
+
+      <!-- 基本資訊卡 -->
+      <div class="card info-card">
+        <h3 class="card-title">基本資訊</h3>
+        <dl class="info-list">
+          <!-- TODO: 動態填入以下欄位 -->
+          <dt>基金規模</dt>
+          <dd id="infoAum">—</dd>
+
+          <dt>經理費率</dt>
+          <dd id="infoExpense">—</dd>
+
+          <dt>風險等級</dt>
+          <dd id="infoRisk">—</dd>
+
+          <dt>最新 NAV</dt>
+          <dd id="infoNav">—</dd>
+
+          <dt>資料日期</dt>
+          <dd id="infoNavDate">—</dd>
+        </dl>
+      </div>
+    </div>
+
+    <!-- ── 風險指標區 ─────────────────────────────── -->
+    <section class="metrics-section">
+      <h2 class="section-title">風險指標
+        <!-- 期間提示 -->
+        <span id="metricsPeriodLabel" class="period-label">（3Y）</span>
+      </h2>
+
+      <div class="metrics-grid">
+        <!--
+          TODO: 對每個指標用 JS 動態渲染 .metric-card
+          每張卡片結構（參考 spec 6.3）：
+          ┌────────────────────────────────┐
+          │  Sharpe Ratio              ⓘ  │
+          │                               │
+          │       1.23                    │
+          │                               │
+          │  ████████░░  良好             │
+          │  同類均值 0.89                │
+          └────────────────────────────────┘
+          
+          指標清單：Sharpe / Sortino / MDD / Beta / Alpha / Calmar
+          評級邏輯寫在 api.js 的 rateMetric()
+        -->
+      </div>
+    </section>
+
+    <!-- ── 與基準指數比較圖 ─────────────────────────── -->
+    <section class="benchmark-section">
+      <h2 class="section-title">與基準指數比較</h2>
+      <!-- TODO:
+        - NAV 和基準指數起點標準化為 100
+        - 用 charts.js 的 drawBenchmarkChart() 繪製雙折線
+        - 基金線：藍色 #2E86AB，基準線：灰色 #999
+      -->
+      <div class="card">
+        <canvas id="benchmarkChart"></canvas>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Footer ──────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>本平台資料僅供學術研究參考，不構成投資建議。</p>
+    </div>
+  </footer>
+
+  <script src="js/api.js"></script>
+  <script src="js/charts.js"></script>
+  <script>
+    // TODO: 初始化基金分析頁
+    // 1. 從 URL 參數取得 fund_id（e.g. ?id=0001）
+    // 2. 呼叫 getFund(id) 填入標題列 + 基本資訊卡
+    // 3. 呼叫 getFundNav(id, '3Y') 畫 NAV 圖
+    // 4. 呼叫 getFundMetrics(id, '3Y') 渲染指標卡
+    // 5. 綁定期間切換按鈕事件（重新 fetch + redraw）
+    // 6. 綁定「加入比較」按鈕（寫入 localStorage）
+  </script>
+</body>
+</html>

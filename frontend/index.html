@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>基金分析平台</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────── -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="index.html" class="logo">
+        <!-- TODO: 放 Logo 圖示或文字 Logo -->
+        FundLens
+      </a>
+      <nav class="main-nav">
+        <!-- TODO: 導覽連結：首頁 / 基金列表 / 投資組合比較 -->
+      </nav>
+    </div>
+  </header>
+
+  <!-- ── Hero 搜尋區 ──────────────────────────────── -->
+  <section class="hero">
+    <div class="container">
+      <h1 class="hero-title">
+        <!-- TODO: 主標題文案 -->
+        找到真正抗風險的基金
+      </h1>
+      <p class="hero-sub">
+        <!-- TODO: 副標題說明文字 -->
+      </p>
+
+      <!-- 搜尋列 -->
+      <div class="search-bar">
+        <input
+          type="text"
+          id="searchInput"
+          class="search-input"
+          placeholder="輸入基金名稱或代號..."
+        />
+        <button id="searchBtn" class="btn btn-primary">搜尋</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 熱門排行 ──────────────────────────────────── -->
+  <section class="section">
+    <div class="container">
+      <h2 class="section-title">高 Sharpe Ratio 基金排行</h2>
+      <!-- TODO:
+        - 用 JS 打 GET /funds?sort=sharpe 取資料
+        - 渲染成排行卡片列表
+        - 每張卡片顯示：基金名稱、Sharpe 值、1Y 報酬率、MDD
+      -->
+      <div id="topFundsGrid" class="funds-grid">
+        <!-- 由 JS 動態渲染 -->
+        <p class="placeholder-text">載入中...</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 最新基金列表 ────────────────────────────────── -->
+  <section class="section section-alt">
+    <div class="container">
+      <h2 class="section-title">所有基金</h2>
+
+      <!-- 篩選列 -->
+      <div class="filter-bar">
+        <!-- TODO: 類型篩選下拉（股票型 / 債券型 / 平衡型...）-->
+        <select id="typeFilter" class="filter-select">
+          <option value="">全部類型</option>
+          <!-- TODO: 動態帶入類型選項 -->
+        </select>
+        <!-- TODO: 更多篩選條件 -->
+      </div>
+
+      <!-- 基金列表表格 -->
+      <div class="table-wrapper">
+        <table class="funds-table" id="fundsTable">
+          <thead>
+            <tr>
+              <th>基金名稱</th>
+              <th>類型</th>
+              <th>規模（億）</th>
+              <th>最新 NAV</th>
+              <th>Sharpe (3Y)</th>
+              <th>MDD (3Y)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="fundsTableBody">
+            <!-- TODO: 由 JS 動態渲染，呼叫 api.js 的 getFunds() -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ──────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="container">
+      <!-- TODO: 頁尾說明文字、免責聲明 -->
+      <p>本平台資料僅供學術研究參考，不構成投資建議。</p>
+    </div>
+  </footer>
+
+  <script src="js/api.js"></script>
+  <script src="js/charts.js"></script>
+  <script>
+    // TODO: 初始化首頁
+    // 1. 呼叫 getFunds({ sort: 'sharpe', limit: 5 }) 渲染排行榜
+    // 2. 呼叫 getFunds() 渲染完整列表
+    // 3. 綁定搜尋按鈕事件
+    // 4. 綁定類型篩選事件
+  </script>
+</body>
+</html>

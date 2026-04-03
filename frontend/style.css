@@ -1,0 +1,514 @@
+/* =============================================
+   style.css — 基金分析平台
+   ============================================= */
+
+/* ── CSS 自訂變數（Design Spec 6.2）────────── */
+:root {
+  --color-primary:     #1E3A5F;   /* 深藍：Header、主按鈕 */
+  --color-secondary:   #2E86AB;   /* 亮藍：連結、互動 */
+  --color-positive:    #06A77D;   /* 綠：正報酬、Alpha > 0 */
+  --color-negative:    #D62839;   /* 紅：負報酬、高 MDD */
+  --color-bg:          #F5F7FA;   /* 背景 */
+  --color-bg-alt:      #EAECF0;   /* 次背景 */
+  --color-text:        #1A1A2E;   /* 主文字 */
+  --color-text-muted:  #6B7280;   /* 輔助文字 */
+  --color-border:      #DDE1E7;   /* 邊框 */
+  --color-card-bg:     #FFFFFF;   /* 卡片背景 */
+
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  16px;
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.10);
+
+  --font-base: 'Inter', 'Noto Sans TC', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* ── Reset & Base ───────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-base);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+}
+
+a { color: var(--color-secondary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── 容器 ───────────────────────────────────── */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ── Header ─────────────────────────────────── */
+.site-header {
+  background-color: var(--color-primary);
+  padding: 0 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+}
+
+.logo {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.main-nav {
+  /* TODO: 導覽列樣式 */
+  display: flex;
+  gap: 24px;
+}
+
+.main-nav a {
+  color: rgba(255,255,255,0.85);
+  font-size: 0.9rem;
+}
+
+/* ── Buttons ─────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background-color: var(--color-secondary);
+  color: #fff;
+}
+.btn-primary:hover { background-color: #256d8d; }
+
+.btn-outline {
+  background-color: transparent;
+  border-color: var(--color-secondary);
+  color: var(--color-secondary);
+}
+.btn-outline:hover { background-color: var(--color-secondary); color: #fff; }
+
+.btn-ghost {
+  background-color: transparent;
+  color: var(--color-text-muted);
+}
+
+/* ── Hero 區 ─────────────────────────────────── */
+.hero {
+  background: linear-gradient(135deg, var(--color-primary) 0%, #2C5282 100%);
+  padding: 64px 0;
+  text-align: center;
+  color: #fff;
+}
+
+.hero-title {
+  font-size: 2.25rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.hero-sub {
+  font-size: 1rem;
+  color: rgba(255,255,255,0.8);
+  margin-bottom: 32px;
+}
+
+/* 搜尋列 */
+.search-bar {
+  display: flex;
+  max-width: 560px;
+  margin: 0 auto;
+  gap: 8px;
+}
+
+.search-input {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-size: 1rem;
+  outline: none;
+}
+
+/* ── Section 通用 ────────────────────────────── */
+.section { padding: 48px 0; }
+.section-alt { background-color: var(--color-bg-alt); }
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: var(--color-primary);
+}
+
+/* ── Card ────────────────────────────────────── */
+.card {
+  background-color: var(--color-card-bg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 24px;
+}
+
+.card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--color-primary);
+}
+
+/* ── 版型：兩欄 ──────────────────────────────── */
+.layout-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .layout-two-col { grid-template-columns: 1fr; }
+}
+
+/* ── 指標卡 Grid ─────────────────────────────── */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+/* ── 指標卡（spec 6.3）────────────────────────── */
+.metric-card {
+  background-color: var(--color-card-bg);
+  border-radius: var(--radius-md);
+  border: 2px solid var(--color-border);
+  padding: 20px;
+  position: relative;
+  transition: box-shadow 0.15s ease;
+}
+
+.metric-card:hover { box-shadow: var(--shadow-md); }
+
+/* 評級邊框顏色 */
+.metric-card.grade-excellent { border-color: var(--color-positive); }
+.metric-card.grade-good      { border-color: var(--color-secondary); }
+.metric-card.grade-fair      { border-color: var(--color-border); }
+.metric-card.grade-poor      { border-color: var(--color-negative); }
+
+.metric-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-info-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  margin: 12px 0 8px;
+  color: var(--color-text);
+}
+
+/* TODO: 評級 Bar 樣式 */
+.metric-grade-bar {
+  height: 6px;
+  background-color: var(--color-bg-alt);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.metric-grade-fill {
+  height: 100%;
+  border-radius: 99px;
+  background-color: var(--color-secondary);
+}
+
+.metric-grade-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.metric-avg {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+/* ── 表格 ────────────────────────────────────── */
+.table-wrapper { overflow-x: auto; }
+
+.funds-table,
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.funds-table th,
+.compare-table th {
+  background-color: var(--color-primary);
+  color: #fff;
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.funds-table td,
+.compare-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.funds-table tr:hover td,
+.compare-table tr:hover td {
+  background-color: #F0F4F8;
+}
+
+.val-good { color: var(--color-positive); font-weight: 700; }
+.val-bad  { color: var(--color-negative); font-weight: 700; }
+
+/* ── 篩選列 ───────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  background-color: #fff;
+}
+
+/* ── 基金列表卡片 Grid ───────────────────────── */
+.funds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* ── 期間切換 ─────────────────────────────────── */
+.period-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.period-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background-color: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.period-btn.active {
+  background-color: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+/* ── 基金標題列 ──────────────────────────────── */
+.fund-title-bar {
+  background-color: var(--color-card-bg);
+  border-bottom: 1px solid var(--color-border);
+  padding: 20px 0;
+}
+
+.fund-title-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fund-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.fund-meta {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+/* ── 比較列 ───────────────────────────────────── */
+.compare-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 24px;
+}
+
+.compare-bar-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-right: 8px;
+}
+
+.compare-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  background-color: var(--color-secondary);
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.chip button {
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.compare-bar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Modal ───────────────────────────────────── */
+.modal {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.modal.hidden { display: none; }
+
+.modal-inner {
+  background-color: #fff;
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  width: 480px;
+  max-width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-results {
+  max-height: 300px;
+  overflow-y: auto;
+  /* TODO: 搜尋結果列表樣式 */
+}
+
+/* ── 空狀態 ───────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 64px 0;
+  color: var(--color-text-muted);
+}
+
+/* ── Chart Card ──────────────────────────────── */
+.chart-card canvas {
+  width: 100% !important;
+  /* TODO: 調整圖表高度 */
+}
+
+/* ── Page Main ───────────────────────────────── */
+.page-main { padding: 32px 0; }
+
+.metrics-section,
+.benchmark-section {
+  margin-top: 32px;
+}
+
+.period-label {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  margin-left: 8px;
+}
+
+/* ── 基本資訊清單 ─────────────────────────────── */
+.info-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 20px;
+}
+
+.info-list dt {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.info-list dd {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* ── Placeholder ─────────────────────────────── */
+.placeholder-text {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+/* ── Footer ──────────────────────────────────── */
+.site-footer {
+  background-color: var(--color-primary);
+  color: rgba(255,255,255,0.6);
+  text-align: center;
+  padding: 20px 0;
+  font-size: 0.8rem;
+  margin-top: 64px;
+}
