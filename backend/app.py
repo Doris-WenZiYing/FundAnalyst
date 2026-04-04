@@ -1,160 +1,141 @@
 """
-基金分析平台 — Flask 後端入口
+app.py（FinMind API）
+把原本 load_data() + get_nav_series() + get_benchmark_series()
+全部換成 data_source.py，其餘路由邏輯不變
 """
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from data_source import (
+    get_fund_list,
+    get_fund_info,
+    get_nav_series,
+    get_benchmark_series,
+)
+from calculators.returns import daily_returns, annualized_return, normalize_to_100
+from calculators.risk import annualized_std, downside_std, max_drawdown
+from calculators.ratios import sharpe_ratio, sortino_ratio, calmar_ratio
+from calculators.capm import beta, alpha
 
 app = Flask(__name__)
-CORS(app)  # 允許前端跨域呼叫
+CORS(app)
+
+RF = 0.015  # 無風險利率
 
 
-# ─────────────────────────────────────
-#  TODO: 初始化資料來源
-#  - 從 data/ 載入 CSV 或連接 DB
-#  - 載入基準指數資料（台灣加權指數 / S&P 500）
-#  - 設定無風險利率（預設 1.5%）
-# ─────────────────────────────────────
+def compute_metrics(nav, bench, period):
+    ret           = daily_returns(nav)
+    bench_ret     = daily_returns(bench)
+    ann_ret       = annualized_return(nav)
+    ann_std       = annualized_std(ret)
+    d_std         = downside_std(ret, rf_daily=RF / 252)
+    mdd           = max_drawdown(nav)
+    bench_ann_ret = annualized_return(bench)
+    b             = beta(ret, bench_ret)
 
+    def _r(v): return round(v, 4) if v is not None else None
 
-# ── 基金列表 ──────────────────────────
+    return {
+        "period":            period,
+        "annualized_return": _r(ann_ret),
+        "annualized_std":    _r(ann_std),
+        "sharpe":            _r(sharpe_ratio(ann_ret, RF, ann_std)),
+        "sortino":           _r(sortino_ratio(ann_ret, RF, d_std)),
+        "mdd":               _r(mdd),
+        "beta":              _r(b),
+        "alpha":             _r(alpha(ann_ret, RF, b, bench_ann_ret)),
+        "calmar":            _r(calmar_ratio(ann_ret, mdd)),
+    }
+
 
 @app.route("/funds", methods=["GET"])
 def get_funds():
-    """
-    GET /funds
-    查詢參數：
-      - q: 搜尋關鍵字（基金名稱 / 代號）
-      - type: 基金類型篩選
-      - sort: 排序欄位（sharpe / return / mdd）
+    q     = request.args.get("q", "").lower()
+    ftype = request.args.get("type", "")
+    sort  = request.args.get("sort", "")
+    limit = request.args.get("limit", type=int)
 
-    TODO:
-      1. 從資料來源讀取基金列表
-      2. 套用 q / type / sort 過濾條件
-      3. 回傳格式：
-         [
-           {
-             "id": "0001",
-             "name": "XX基金",
-             "company": "XX投信",
-             "type": "股票型",
-             "nav": 12.34,
-             "nav_date": "2024-01-15"
-           }, ...
-         ]
-    """
-    # TODO: 實作
-    return jsonify({"message": "TODO: 回傳基金列表"})
+    df = get_fund_list()  # ← 從 FinMind 拿，其餘邏輯完全一樣
 
+    if q:
+        df = df[df["name"].str.lower().str.contains(q) | df["fund_id"].str.contains(q)]
+    if ftype:
+        df = df[df["type"] == ftype]
+    if sort and sort in df.columns:
+        df = df.sort_values(sort)
+    if limit:
+        df = df.head(limit)
 
-# ── 單一基金 ──────────────────────────
+    return jsonify(df.to_dict(orient="records"))
+
 
 @app.route("/funds/<fund_id>", methods=["GET"])
 def get_fund(fund_id):
-    """
-    GET /funds/<fund_id>
-    回傳單一基金基本資訊
-
-    TODO:
-      1. 用 fund_id 查詢基金資料
-      2. 回傳格式：
-         {
-           "id": "0001",
-           "name": "XX基金",
-           "company": "XX投信",
-           "type": "股票型",
-           "aum": 50.2,        # 規模（億）
-           "expense_ratio": 1.5,
-           "risk_level": 3,
-           "nav": 12.34,
-           "nav_date": "2024-01-15"
-         }
-    """
-    # TODO: 實作
-    return jsonify({"message": f"TODO: 回傳基金 {fund_id} 資料"})
+    info = get_fund_info(fund_id)  # ← 從 FinMind 拿
+    if not info:
+        return jsonify({"error": "找不到基金"}), 404
+    return jsonify(info)
 
 
 @app.route("/funds/<fund_id>/nav", methods=["GET"])
 def get_fund_nav(fund_id):
-    """
-    GET /funds/<fund_id>/nav
-    查詢參數：
-      - period: 1Y / 3Y / 5Y（預設 3Y）
+    period = request.args.get("period", "3Y")
+    nav    = get_nav_series(fund_id, period)   # ← 從 FinMind 拿
+    bench  = get_benchmark_series(period)       # ← 從 FinMind 拿
 
-    TODO:
-      1. 依 period 計算起始日期
-      2. 查詢該基金的歷史 NAV
-      3. 同時回傳基準指數的歷史資料（供比較圖用）
-      4. 回傳格式：
-         {
-           "fund": [{"date": "2021-01-04", "nav": 10.00}, ...],
-           "benchmark": [{"date": "2021-01-04", "value": 100.00}, ...]
-         }
-    """
-    # TODO: 實作
-    return jsonify({"message": f"TODO: 回傳基金 {fund_id} NAV 歷史"})
+    if nav.empty:
+        return jsonify({"error": "無 NAV 資料"}), 404
+
+    return jsonify({
+        "fund":                [{"date": str(d.date()), "nav": round(v, 4)} for d, v in nav.items()],
+        "fund_normalized":     [{"date": str(d.date()), "value": round(v, 4)} for d, v in normalize_to_100(nav).items()],
+        "benchmark_normalized":[{"date": str(d.date()), "value": round(v, 4)} for d, v in normalize_to_100(bench).items()] if not bench.empty else [],
+    })
 
 
 @app.route("/funds/<fund_id>/metrics", methods=["GET"])
 def get_fund_metrics(fund_id):
-    """
-    GET /funds/<fund_id>/metrics
-    查詢參數：
-      - period: 1Y / 3Y / 5Y（預設 3Y）
+    period = request.args.get("period", "3Y")
+    nav    = get_nav_series(fund_id, period)
+    bench  = get_benchmark_series(period)
 
-    TODO:
-      1. 取得該基金在指定期間的 NAV 序列
-      2. 取得同期間的基準指數資料
-      3. 呼叫 calculators 各模組計算指標
-      4. 回傳格式：
-         {
-           "period": "3Y",
-           "sharpe": 1.23,
-           "sortino": 1.89,
-           "mdd": -0.123,
-           "beta": 0.82,
-           "alpha": 0.021,
-           "calmar": 0.95,
-           "annualized_return": 0.087,
-           "annualized_std": 0.124
-         }
-    """
-    # TODO: 實作
-    return jsonify({"message": f"TODO: 回傳基金 {fund_id} 指標"})
+    if nav.empty:
+        return jsonify({"error": "無 NAV 資料"}), 404
+    if bench.empty:
+        return jsonify({"error": "無基準指數資料"}), 404
 
+    return jsonify(compute_metrics(nav, bench, period))
 
-# ── 多基金比較 ────────────────────────
 
 @app.route("/compare", methods=["POST"])
 def compare_funds():
-    """
-    POST /compare
-    Body: { "fund_ids": ["0001", "0002", "0003"], "period": "3Y" }
+    body     = request.get_json()
+    fund_ids = body.get("fund_ids", [])
+    period   = body.get("period", "3Y")
 
-    TODO:
-      1. 解析 fund_ids 和 period
-      2. 驗證：基金數量限制 3–5 檔
-      3. 對每檔基金分別呼叫指標計算
-      4. 回傳格式：
-         {
-           "period": "3Y",
-           "funds": [
-             {
-               "id": "0001",
-               "name": "XX基金",
-               "metrics": { "sharpe": 1.23, "sortino": 1.89, ... },
-               "nav_series": [{"date": "...", "normalized": 100.0}, ...]
-             }, ...
-           ]
-         }
-      注意：nav_series 起點標準化為 100
-    """
-    # TODO: 實作
-    body = request.get_json()
-    return jsonify({"message": "TODO: 回傳多基金比較資料", "received": body})
+    if not 2 <= len(fund_ids) <= 5:
+        return jsonify({"error": "基金數量需在 2–5 檔之間"}), 400
 
+    bench   = get_benchmark_series(period)
+    results = []
 
-# ─────────────────────────────────────
+    for fid in fund_ids:
+        nav  = get_nav_series(fid, period)
+        info = get_fund_info(fid)
+        if nav.empty:
+            continue
+        results.append({
+            "id":       fid,
+            "name":     info["name"] if info else fid,
+            "metrics":  compute_metrics(nav, bench, period),
+            "nav_series": [
+                {"date": str(d.date()), "normalized": round(v, 4)}
+                for d, v in normalize_to_100(nav).items()
+            ],
+        })
+
+    return jsonify({"period": period, "funds": results})
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
