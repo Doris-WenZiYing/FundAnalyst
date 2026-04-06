@@ -512,3 +512,60 @@ a:hover { text-decoration: underline; }
   font-size: 0.8rem;
   margin-top: 64px;
 }
+
+/* ── 補充樣式 ─────────────────────────────────── */
+
+/* 導覽 active */
+.main-nav a.active { color: #fff; font-weight: 700; border-bottom: 2px solid #fff; }
+
+/* 基金卡片（排行用）*/
+.fund-card {
+  background: var(--color-card-bg);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border);
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.fund-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.fund-card-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; color: var(--color-primary); }
+.fund-card-company { font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 12px; }
+.fund-card-metrics { display: flex; gap: 8px; flex-wrap: wrap; }
+.metric-badge {
+  font-size: 0.8rem; background: #EEF4FB; color: var(--color-primary);
+  padding: 3px 8px; border-radius: 99px;
+}
+
+/* 錯誤訊息 */
+.error-msg { color: var(--color-negative); font-size: 0.9rem; }
+
+/* 表格連結按鈕 */
+.btn-link { color: var(--color-secondary); font-size: 0.85rem; font-weight: 600; }
+.btn-link:hover { text-decoration: underline; }
+
+/* mono 數字 */
+.mono { font-family: var(--font-mono); font-size: 0.9rem; }
+
+/* Modal 搜尋結果 */
+.modal-result-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.modal-result-item:hover { background: var(--color-bg); }
+.modal-result-item strong { font-size: 0.9rem; }
+.modal-result-item span { font-size: 0.8rem; color: var(--color-text-muted); }
+
+/* 資訊卡列表 */
+.info-card { display: flex; flex-direction: column; }
+.info-list { display: grid; grid-template-columns: auto 1fr; gap: 10px 20px; align-content: start; }
+.info-list dt { font-size: 0.8rem; color: var(--color-text-muted); font-weight: 600; }
+.info-list dd { font-size: 0.9rem; font-weight: 600; }
+
+/* 圖表卡高度 */
+.chart-card { min-height: 280px; }

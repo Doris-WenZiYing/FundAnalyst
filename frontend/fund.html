@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>基金分析 — FundLens</title>
   <link rel="stylesheet" href="css/style.css" />
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
 
-  <!-- ── Header（同首頁，可抽成共用元件） ───────────── -->
+  <!-- ── Header ─────────────────────────────────── -->
   <header class="site-header">
     <div class="container header-inner">
       <a href="index.html" class="logo">FundLens</a>
       <nav class="main-nav">
-        <!-- TODO: 同首頁導覽 -->
+        <a href="index.html">首頁</a>
+        <a href="compare.html">投資組合比較</a>
       </nav>
     </div>
   </header>
@@ -24,118 +24,153 @@
   <div class="fund-title-bar">
     <div class="container fund-title-inner">
       <div>
-        <h1 id="fundName" class="fund-name">—</h1>
-        <!-- TODO: 顯示 基金公司 | 類型 | 風險等級 -->
+        <h1 id="fundName" class="fund-name">載入中...</h1>
         <p id="fundMeta" class="fund-meta"></p>
       </div>
-      <button id="addToCompareBtn" class="btn btn-outline">
-        ＋ 加入比較
-      </button>
+      <button id="addToCompareBtn" class="btn btn-outline">＋ 加入比較</button>
     </div>
   </div>
 
   <main class="container page-main">
 
-    <!-- ── 上半：NAV 圖表 + 基本資訊卡 ─────────────── -->
+    <!-- ── 上半：NAV 圖 + 基本資訊 ─────────────── -->
     <div class="layout-two-col">
-
-      <!-- NAV 走勢圖 -->
       <div class="card chart-card">
-        <!-- 期間切換 -->
-        <div class="period-tabs">
-          <button class="period-btn active" data-period="1Y">1Y</button>
-          <button class="period-btn" data-period="3Y">3Y</button>
+        <div class="period-tabs" id="navPeriodTabs">
+          <button class="period-btn" data-period="1Y">1Y</button>
+          <button class="period-btn active" data-period="3Y">3Y</button>
           <button class="period-btn" data-period="5Y">5Y</button>
         </div>
-        <!-- TODO:
-          - 呼叫 GET /funds/<id>/nav?period=3Y
-          - 用 charts.js 的 drawNavChart() 繪製折線圖
-          - 切換期間時重新 fetch 並 redraw
-        -->
-        <canvas id="navChart"></canvas>
+        <canvas id="navChart" height="220"></canvas>
       </div>
 
-      <!-- 基本資訊卡 -->
       <div class="card info-card">
         <h3 class="card-title">基本資訊</h3>
         <dl class="info-list">
-          <!-- TODO: 動態填入以下欄位 -->
-          <dt>基金規模</dt>
-          <dd id="infoAum">—</dd>
-
-          <dt>經理費率</dt>
-          <dd id="infoExpense">—</dd>
-
-          <dt>風險等級</dt>
-          <dd id="infoRisk">—</dd>
-
-          <dt>最新 NAV</dt>
-          <dd id="infoNav">—</dd>
-
-          <dt>資料日期</dt>
-          <dd id="infoNavDate">—</dd>
+          <dt>基金公司</dt><dd id="infoCompany">—</dd>
+          <dt>基金類型</dt><dd id="infoType">—</dd>
+          <dt>風險等級</dt><dd id="infoRisk">—</dd>
+          <dt>基金規模</dt><dd id="infoAum">—</dd>
+          <dt>經理費率</dt><dd id="infoExpense">—</dd>
+          <dt>最新 NAV</dt><dd id="infoNav">—</dd>
+          <dt>資料日期</dt><dd id="infoNavDate">—</dd>
         </dl>
       </div>
     </div>
 
     <!-- ── 風險指標區 ─────────────────────────────── -->
     <section class="metrics-section">
-      <h2 class="section-title">風險指標
-        <!-- 期間提示 -->
+      <h2 class="section-title">
+        風險指標
         <span id="metricsPeriodLabel" class="period-label">（3Y）</span>
       </h2>
-
-      <div class="metrics-grid">
-        <!--
-          TODO: 對每個指標用 JS 動態渲染 .metric-card
-          每張卡片結構（參考 spec 6.3）：
-          ┌────────────────────────────────┐
-          │  Sharpe Ratio              ⓘ  │
-          │                               │
-          │       1.23                    │
-          │                               │
-          │  ████████░░  良好             │
-          │  同類均值 0.89                │
-          └────────────────────────────────┘
-          
-          指標清單：Sharpe / Sortino / MDD / Beta / Alpha / Calmar
-          評級邏輯寫在 api.js 的 rateMetric()
-        -->
+      <div class="metrics-grid" id="metricsGrid">
+        <p class="placeholder-text">載入中...</p>
       </div>
     </section>
 
-    <!-- ── 與基準指數比較圖 ─────────────────────────── -->
+    <!-- ── 與基準指數比較圖 ─────────────────────── -->
     <section class="benchmark-section">
-      <h2 class="section-title">與基準指數比較</h2>
-      <!-- TODO:
-        - NAV 和基準指數起點標準化為 100
-        - 用 charts.js 的 drawBenchmarkChart() 繪製雙折線
-        - 基金線：藍色 #2E86AB，基準線：灰色 #999
-      -->
+      <h2 class="section-title">與基準指數（0050）比較</h2>
       <div class="card">
-        <canvas id="benchmarkChart"></canvas>
+        <canvas id="benchmarkChart" height="200"></canvas>
       </div>
     </section>
 
   </main>
 
-  <!-- ── Footer ──────────────────────────────────── -->
   <footer class="site-footer">
     <div class="container">
-      <p>本平台資料僅供學術研究參考，不構成投資建議。</p>
+      <p>本平台資料來源為 FinMind，僅供學術研究參考，不構成投資建議。</p>
     </div>
   </footer>
 
   <script src="js/api.js"></script>
   <script src="js/charts.js"></script>
   <script>
-    // TODO: 初始化基金分析頁
-    // 1. 從 URL 參數取得 fund_id（e.g. ?id=0001）
-    // 2. 呼叫 getFund(id) 填入標題列 + 基本資訊卡
-    // 3. 呼叫 getFundNav(id, '3Y') 畫 NAV 圖
-    // 4. 呼叫 getFundMetrics(id, '3Y') 渲染指標卡
-    // 5. 綁定期間切換按鈕事件（重新 fetch + redraw）
-    // 6. 綁定「加入比較」按鈕（寫入 localStorage）
+    // ── 從 URL 取 fund_id ────────────────────────
+    const params = new URLSearchParams(location.search);
+    const FUND_ID = params.get("id");
+    if (!FUND_ID) { document.body.innerHTML = "<p style='padding:40px'>缺少基金 ID，請從首頁進入。</p>"; }
+
+    let currentPeriod = "3Y";
+
+    // ── 載入基本資訊 ────────────────────────────
+    async function loadFundInfo() {
+      try {
+        const f = await getFund(FUND_ID);
+        document.title = `${f.name || FUND_ID} — FundLens`;
+        document.getElementById("fundName").textContent = f.name || FUND_ID;
+        document.getElementById("fundMeta").textContent =
+          [f.company, f.type].filter(Boolean).join(" · ");
+        document.getElementById("infoCompany").textContent  = f.company || "—";
+        document.getElementById("infoType").textContent     = f.type    || "—";
+        document.getElementById("infoRisk").textContent     = f.risk_level ? `RR${f.risk_level}` : "—";
+        document.getElementById("infoAum").textContent      = f.aum != null ? `${Number(f.aum).toFixed(1)} 億` : "—";
+        document.getElementById("infoExpense").textContent  = f.expense_ratio != null ? `${f.expense_ratio}%` : "—";
+        document.getElementById("infoNav").textContent      = f.nav != null ? Number(f.nav).toFixed(4) : "—";
+        document.getElementById("infoNavDate").textContent  = f.nav_date || "—";
+
+        // 加入比較按鈕
+        document.getElementById("addToCompareBtn").addEventListener("click", () => {
+          const added = addToCompare(FUND_ID, f.name || FUND_ID);
+          if (added) alert(`已將「${f.name}」加入比較清單`);
+          else alert("此基金已在比較清單中");
+        });
+      } catch (e) {
+        document.getElementById("fundName").textContent = "載入失敗";
+        console.error(e);
+      }
+    }
+
+    // ── 載入 NAV 圖表 ────────────────────────────
+    async function loadNavChart(period) {
+      try {
+        const data = await getFundNav(FUND_ID, period);
+        drawNavChart("navChart", data.fund);
+        if (data.benchmark_normalized?.length) {
+          drawBenchmarkChart(
+            "benchmarkChart",
+            data.fund_normalized,
+            data.benchmark_normalized,
+            "基金", "0050"
+          );
+        }
+      } catch (e) {
+        showError("navChart", e.message);
+      }
+    }
+
+    // ── 載入指標卡 ──────────────────────────────
+    async function loadMetrics(period) {
+      const grid = document.getElementById("metricsGrid");
+      document.getElementById("metricsPeriodLabel").textContent = `（${period}）`;
+      grid.innerHTML = "<p class='placeholder-text'>計算中...</p>";
+      try {
+        const m = await getFundMetrics(FUND_ID, period);
+        renderMetricCards("metricsGrid", m);
+      } catch (e) {
+        grid.innerHTML = `<p class="error-msg">⚠️ ${e.message}</p>`;
+      }
+    }
+
+    // ── 期間切換 ────────────────────────────────
+    document.getElementById("navPeriodTabs").addEventListener("click", (e) => {
+      const btn = e.target.closest(".period-btn");
+      if (!btn) return;
+      document.querySelectorAll("#navPeriodTabs .period-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentPeriod = btn.dataset.period;
+      loadNavChart(currentPeriod);
+      loadMetrics(currentPeriod);
+    });
+
+    // ── 初始化 ──────────────────────────────────
+    if (FUND_ID) {
+      loadFundInfo();
+      loadNavChart(currentPeriod);
+      loadMetrics(currentPeriod);
+    }
   </script>
 </body>
 </html>

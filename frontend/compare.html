@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>投資組合比較 — FundLens</title>
   <link rel="stylesheet" href="css/style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
 
@@ -14,7 +14,8 @@
     <div class="container header-inner">
       <a href="index.html" class="logo">FundLens</a>
       <nav class="main-nav">
-        <!-- TODO: 同首頁導覽 -->
+        <a href="index.html">首頁</a>
+        <a href="compare.html" class="active">投資組合比較</a>
       </nav>
     </div>
   </header>
@@ -24,64 +25,47 @@
     <!-- ── 比較清單列 ────────────────────────────── -->
     <div class="compare-bar">
       <h1 class="compare-bar-title">投資組合比較</h1>
-      <div id="compareChips" class="compare-chips">
-        <!-- TODO: 從 localStorage 讀取已加入的基金
-             渲染成 chip，每個 chip 有移除按鈕
-             結構：<span class="chip">基金名稱 <button>×</button></span>
-             最多 5 檔，達上限時「＋新增」變 disabled
-        -->
-      </div>
+      <div id="compareChips" class="compare-chips"></div>
       <div class="compare-bar-actions">
         <button id="addFundBtn" class="btn btn-outline">＋ 新增基金</button>
         <button id="runCompareBtn" class="btn btn-primary">開始比較</button>
       </div>
     </div>
 
-    <!-- 新增基金搜尋 Modal（預設隱藏）-->
+    <!-- ── 新增基金 Modal ──────────────────────── -->
     <div id="addFundModal" class="modal hidden">
       <div class="modal-inner">
-        <h3>搜尋基金</h3>
+        <h3>搜尋並加入基金</h3>
         <input type="text" id="modalSearch" class="search-input" placeholder="輸入名稱或代號..." />
-        <div id="modalResults" class="modal-results">
-          <!-- TODO: 即時搜尋結果，點擊加入比較清單 -->
-        </div>
+        <div id="modalResults" class="modal-results"></div>
         <button id="closeModalBtn" class="btn btn-ghost">關閉</button>
       </div>
     </div>
 
-    <!-- ── 比較結果區（呼叫 API 後才顯示）─────────── -->
+    <!-- ── 空狀態 ────────────────────────────────── -->
+    <div id="emptyState" class="empty-state">
+      <p>請加入 2 檔以上基金，再點「開始比較」</p>
+      <p style="margin-top:8px;font-size:0.85rem;color:#9CA3AF">你也可以從基金分析頁按「＋ 加入比較」</p>
+    </div>
+
+    <!-- ── 比較結果區 ────────────────────────────── -->
     <div id="compareResult" class="hidden">
 
-      <!-- 期間切換 -->
-      <div class="period-tabs">
-        <button class="period-btn active" data-period="1Y">1Y</button>
-        <button class="period-btn" data-period="3Y">3Y</button>
+      <div class="period-tabs" id="comparePeriodTabs">
+        <button class="period-btn" data-period="1Y">1Y</button>
+        <button class="period-btn active" data-period="3Y">3Y</button>
         <button class="period-btn" data-period="5Y">5Y</button>
       </div>
 
-      <!-- 上半：走勢疊圖 + 雷達圖 -->
-      <div class="layout-two-col">
-
-        <!-- 報酬走勢疊圖 -->
+      <!-- 走勢疊圖 + 雷達圖 -->
+      <div class="layout-two-col" style="margin-bottom:20px">
         <div class="card chart-card">
-          <h3 class="card-title">報酬走勢比較（起點標準化為 100）</h3>
-          <!-- TODO:
-            - 呼叫 charts.js 的 drawOverlayChart()
-            - 多條折線，每條對應一檔基金（不同顏色）
-            - 圖例顯示基金簡稱
-          -->
-          <canvas id="overlayChart"></canvas>
+          <h3 class="card-title">報酬走勢比較（起點 = 100）</h3>
+          <canvas id="overlayChart" height="220"></canvas>
         </div>
-
-        <!-- 指標雷達圖 -->
         <div class="card chart-card">
           <h3 class="card-title">指標雷達圖</h3>
-          <!-- TODO:
-            - 呼叫 charts.js 的 drawRadarChart()
-            - 各軸：Sharpe / Sortino / Calmar / Alpha / (1-|Beta|) / (1-|MDD|)
-            - 注意：MDD 和 Beta 需轉換方向（越小越好 → 反轉）
-          -->
-          <canvas id="radarChart"></canvas>
+          <canvas id="radarChart" height="220"></canvas>
         </div>
       </div>
 
@@ -89,66 +73,175 @@
       <div class="card">
         <h3 class="card-title">指標對比</h3>
         <div class="table-wrapper">
-          <table class="compare-table" id="compareTable">
-            <thead>
-              <tr>
-                <th>指標</th>
-                <!-- TODO: 動態加入各基金的欄位標題 -->
-              </tr>
-            </thead>
-            <tbody>
-              <!-- TODO: 動態渲染以下指標列
-                   每列結構：
-                   <tr>
-                     <td>Sharpe Ratio</td>
-                     <td class="val-good">1.23</td>  ← 最高值加 class
-                     <td>0.87</td>
-                     <td>1.05</td>
-                   </tr>
-                   
-                   指標列順序：
-                   Sharpe / Sortino / MDD / Beta / Alpha / Calmar / 年化報酬 / 年化標準差
-                   
-                   顏色規則：
-                   - 正向指標（Sharpe / Sortino / Alpha / Calmar）：最高值標綠
-                   - 負向指標（MDD / Beta / 年化標準差）：最低值標綠
-              -->
-            </tbody>
+          <table class="compare-table">
+            <thead id="compareTableHead"></thead>
+            <tbody id="compareTableBody"></tbody>
           </table>
         </div>
       </div>
-
-    </div><!-- /compareResult -->
-
-    <!-- 空狀態提示 -->
-    <div id="emptyState" class="empty-state">
-      <p>請先加入 2 檔以上基金，再點「開始比較」</p>
     </div>
 
   </main>
 
-  <!-- ── Footer ──────────────────────────────────── -->
   <footer class="site-footer">
     <div class="container">
-      <p>本平台資料僅供學術研究參考，不構成投資建議。</p>
+      <p>本平台資料來源為 FinMind，僅供學術研究參考，不構成投資建議。</p>
     </div>
   </footer>
 
   <script src="js/api.js"></script>
   <script src="js/charts.js"></script>
   <script>
-    // TODO: 初始化比較頁
-    // 1. 從 localStorage 讀取 compareList（fund_id 陣列）
-    // 2. 渲染比較清單 chips
-    // 3. 綁定「＋新增基金」→ 開啟 Modal
-    // 4. 綁定「開始比較」→ 呼叫 compareFunds(ids, period)
-    // 5. compareFunds 成功後：
-    //    a. 顯示 #compareResult，隱藏 #emptyState
-    //    b. 呼叫 drawOverlayChart()
-    //    c. 呼叫 drawRadarChart()
-    //    d. 渲染對比表格
-    // 6. 綁定期間切換按鈕（重新比較）
-    // 7. Modal 搜尋：即時打 GET /funds?q=xxx，點擊加入 compareList
+    let currentPeriod = "3Y";
+
+    // ── 渲染比較清單 chips ──────────────────────
+    function renderChips() {
+      const list = getCompareList();
+      const chips = document.getElementById("compareChips");
+      chips.innerHTML = list.map(f => `
+        <span class="chip">
+          ${f.name || f.id}
+          <button onclick="removeChip('${f.id}')">×</button>
+        </span>`).join("");
+    }
+
+    function removeChip(fundId) {
+      removeFromCompare(fundId);
+      renderChips();
+    }
+
+    // ── Modal 搜尋 ──────────────────────────────
+    let modalTimer = null;
+    document.getElementById("modalSearch").addEventListener("input", (e) => {
+      clearTimeout(modalTimer);
+      const q = e.target.value.trim();
+      if (!q) { document.getElementById("modalResults").innerHTML = ""; return; }
+      modalTimer = setTimeout(async () => {
+        try {
+          const funds = await getFunds({ q, limit: 8 });
+          document.getElementById("modalResults").innerHTML = funds.map(f => `
+            <div class="modal-result-item" onclick="addFromModal('${f.fund_id}', '${(f.name||'').replace(/'/g,"\\'")}')">
+              <strong>${f.name || f.fund_id}</strong>
+              <span>${f.company || ""}</span>
+            </div>`).join("") || "<p class='placeholder-text'>找不到結果</p>";
+        } catch { document.getElementById("modalResults").innerHTML = "<p class='error-msg'>搜尋失敗</p>"; }
+      }, 300);
+    });
+
+    function addFromModal(fundId, fundName) {
+      addToCompare(fundId, fundName);
+      renderChips();
+      document.getElementById("addFundModal").classList.add("hidden");
+      document.getElementById("modalSearch").value = "";
+      document.getElementById("modalResults").innerHTML = "";
+    }
+
+    document.getElementById("addFundBtn").addEventListener("click", () => {
+      document.getElementById("addFundModal").classList.remove("hidden");
+      document.getElementById("modalSearch").focus();
+    });
+    document.getElementById("closeModalBtn").addEventListener("click", () => {
+      document.getElementById("addFundModal").classList.add("hidden");
+    });
+
+    // ── 渲染對比表格 ────────────────────────────
+    const METRIC_ROWS = [
+      { key: "annualized_return", label: "年化報酬",   format: v => fmt(v, "pct"),   higher: true  },
+      { key: "sharpe",            label: "Sharpe",      format: v => fmt(v, "ratio"), higher: true  },
+      { key: "sortino",           label: "Sortino",     format: v => fmt(v, "ratio"), higher: true  },
+      { key: "calmar",            label: "Calmar",      format: v => fmt(v, "ratio"), higher: true  },
+      { key: "mdd",               label: "MDD",         format: v => fmt(v, "pct"),   higher: false },
+      { key: "beta",              label: "Beta",        format: v => fmt(v, "ratio"), higher: null  },
+      { key: "alpha",             label: "Alpha",       format: v => fmt(v, "pct2"),  higher: true  },
+      { key: "annualized_std",    label: "年化波動率",  format: v => fmt(v, "pct"),   higher: false },
+    ];
+
+    function renderCompareTable(funds) {
+      const thead = document.getElementById("compareTableHead");
+      const tbody = document.getElementById("compareTableBody");
+
+      thead.innerHTML = `<tr>
+        <th>指標</th>
+        ${funds.map(f => `<th>${f.name}</th>`).join("")}
+      </tr>`;
+
+      tbody.innerHTML = METRIC_ROWS.map(row => {
+        const vals = funds.map(f => f.metrics[row.key]);
+        const numVals = vals.filter(v => v != null);
+        const best = row.higher === true  ? Math.max(...numVals)
+                   : row.higher === false ? Math.min(...numVals)
+                   : null;
+        const worst = row.higher === true  ? Math.min(...numVals)
+                    : row.higher === false ? Math.max(...numVals)
+                    : null;
+
+        return `<tr>
+          <td><strong>${row.label}</strong></td>
+          ${vals.map(v => {
+            let cls = "";
+            if (row.higher !== null && v != null) {
+              if (v === best)  cls = "val-good";
+              if (v === worst) cls = "val-bad";
+            }
+            return `<td class="${cls}">${row.format(v)}</td>`;
+          }).join("")}
+        </tr>`;
+      }).join("");
+    }
+
+    // ── 執行比較 ────────────────────────────────
+    async function runCompare(period) {
+      const list = getCompareList();
+      if (list.length < 2) {
+        alert("請先加入至少 2 檔基金");
+        return;
+      }
+      document.getElementById("emptyState").classList.add("hidden");
+      document.getElementById("compareResult").classList.remove("hidden");
+      document.getElementById("compareTableBody").innerHTML =
+        `<tr><td colspan="${list.length + 1}" class="placeholder-text">計算中...</td></tr>`;
+
+      try {
+        const data = await compareFunds(list.map(f => f.id), period);
+        const funds = data.funds;
+
+        // 走勢疊圖
+        drawOverlayChart("overlayChart", funds.map(f => ({
+          name: f.name,
+          series: f.nav_series,
+        })));
+
+        // 雷達圖
+        drawRadarChart("radarChart", funds.map(f => ({
+          name: f.name,
+          metrics: f.metrics,
+        })));
+
+        // 對比表格
+        renderCompareTable(funds);
+      } catch (e) {
+        document.getElementById("compareTableBody").innerHTML =
+          `<tr><td colspan="10" class="error-msg">⚠️ ${e.message}</td></tr>`;
+      }
+    }
+
+    // ── 事件綁定 ────────────────────────────────
+    document.getElementById("runCompareBtn").addEventListener("click", () => runCompare(currentPeriod));
+
+    document.getElementById("comparePeriodTabs").addEventListener("click", (e) => {
+      const btn = e.target.closest(".period-btn");
+      if (!btn) return;
+      document.querySelectorAll("#comparePeriodTabs .period-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentPeriod = btn.dataset.period;
+      runCompare(currentPeriod);
+    });
+
+    // ── 初始化 ──────────────────────────────────
+    renderChips();
+    if (getCompareList().length < 2) {
+      document.getElementById("emptyState").classList.remove("hidden");
+    }
   </script>
 </body>
 </html>
