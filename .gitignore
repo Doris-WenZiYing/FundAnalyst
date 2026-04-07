@@ -1,0 +1,38 @@
+# ── 虛擬環境 ────────────────────────────────────
+venv/
+.venv/
+env/
+
+# ── Python ──────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ── 環境變數（Token 不能上傳！）────────────────
+.env
+.env.local
+.env.*.local
+
+# ── 資料檔案（CSV 可能含敏感資料或太大）────────
+backend/data/*.csv
+backend/data/*.xlsx
+backend/data/*.json
+
+# ── macOS ────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ── VS Code ──────────────────────────────────────
+.vscode/
+*.code-workspace
+
+# ── 編輯器 ───────────────────────────────────────
+*.swp
+*.swo
+*~
+
+# ── Log ─────────────────────────────────────────
+*.log

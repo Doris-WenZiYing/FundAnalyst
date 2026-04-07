@@ -1,4 +1,4 @@
-# 基金分析平台 — 架構設計 & Design Spec（初版）
+# 基金分析平台 — 架構設計 & Design Spec（v2，FinMind API 版）
 ---
 
 ## 一、專案概述
@@ -40,7 +40,7 @@
 │  基金名稱 | 基金公司 | 類型 | ＋加入比較    │
 ├────────────────────────┬────────────────────┤
 │  NAV 走勢折線圖         │  基本資訊卡        │
-│  [1M][3M][6M][1Y][3Y]  │  規模 / 費率 / 等級 │
+│  [1Y][3Y][5Y]          │  規模 / 費率 / 等級 │
 ├────────────────────────┴────────────────────┤
 │  風險指標區（指標卡 + Tooltip 說明）         │
 │  ┌────────┐┌────────┐┌────────┐┌────────┐  │
@@ -50,7 +50,7 @@
 │  │ Alpha  ││ Calmar │                       │
 │  └────────┘└────────┘                       │
 ├─────────────────────────────────────────────┤
-│  與基準指數比較走勢圖                        │
+│  與基準指數（0050）比較走勢圖                │
 └─────────────────────────────────────────────┘
 ```
 
@@ -99,7 +99,7 @@
 
 ### 4.3 計算週期
 
-預設提供 1 年 / 3 年 / 5 年切換，主推 **3 年**（兼顧時效與穩定性）。
+提供 1 年 / 3 年 / 5 年切換，主推 **3 年**（兼顧時效與穩定性）。
 
 ### 4.4 公式備查
 
@@ -111,12 +111,11 @@ Beta (β)      = Cov(Rp, Rm) / Var(Rm)
 Alpha (α)     = Rp - [Rf + β × (Rm - Rf)]
 Calmar Ratio  = 年化報酬率 / |MDD|
 
-符號說明：
-  Rp = 基金報酬率
-  Rf = 無風險利率（建議預設台灣 10 年期公債殖利率，約 1.5–2%）
-  Rm = 大盤（基準指數）報酬率
-  σp = 年化標準差
-  σd = 下行標準差
+參數設定：
+  Rf = 1.5%（台灣 10 年期公債殖利率，固定預設值）
+  Rm = 0050 元大台灣 50（基準指數，來自 FinMind）
+  σp = 年化標準差（日報酬率標準差 × √252）
+  σd = 下行標準差（只計算低於 Rf/252 的日報酬）
 ```
 
 ---
@@ -127,52 +126,87 @@ Calmar Ratio  = 年化報酬率 / |MDD|
 
 ```
 Frontend：HTML + CSS + JavaScript
-Backend： Python（Flask 或 FastAPI）
-圖表：    Chart.js 或 ECharts
+Backend： Python（Flask）
+圖表：    Chart.js
+資料來源：FinMind API（台灣基金 NAV、基準指數）
 部署：    本地端執行
 ```
 
-### 5.2 系統架構（概念）
+### 5.2 系統架構
 
 ```
 Browser（HTML / JS）
         │
         │ HTTP Request
         ▼
-Python Backend（Flask / FastAPI）
+Python Backend（Flask）
         │
-        ├── 指標計算（NumPy / Pandas）
+        ├── data_source.py（FinMind API 呼叫層）
+        │       └── FinMind API ──→ TaiwanMutualFund
+        │                       └→ TaiwanStockPrice（0050 基準指數）
         │
-        └── 資料來源（待確認，見 Q&A）
+        ├── calculators/（指標計算，純 NumPy/Pandas，不碰 API）
+        │       ├── returns.py
+        │       ├── risk.py
+        │       ├── ratios.py
+        │       └── capm.py
+        │
+        └── app.py（路由，呼叫 data_source + calculators）
 ```
 
-### 5.3 後端計算模組規劃
+### 5.3 後端模組說明
 
 ```
-calculators/
-├── returns.py       # 報酬率、年化報酬
-├── risk.py          # 標準差、下行標準差、MDD
-├── ratios.py        # Sharpe、Sortino、Calmar
-└── capm.py          # Alpha、Beta
+backend/
+├── app.py               # Flask 路由，組合資料和計算
+├── data_source.py       # FinMind API 呼叫，統一資料格式
+├── calculators/
+│   ├── returns.py       # 報酬率、年化報酬、標準化
+│   ├── risk.py          # 標準差、下行標準差、MDD
+│   ├── ratios.py        # Sharpe、Sortino、Calmar
+│   └── capm.py          # Alpha、Beta
+└── requirements.txt
 ```
 
-### 5.4 專案目錄結構（草案）
+> **設計原則：** `data_source.py` 是唯一知道 FinMind 的地方。
+> 若未來要換資料來源（換 API 或改用 DB），只動這一個檔案。
+
+### 5.4 FinMind API 使用規格
+
+| 用途 | Dataset | data_id |
+|------|---------|---------|
+| 基金基本資訊 | `TaiwanMutualFundInfo` | 不需指定 |
+| 基金歷史 NAV | `TaiwanMutualFund` | 基金代號（e.g. `TC101`）|
+| 基準指數（0050）| `TaiwanStockPrice` | `0050` |
+
+**注意事項：**
+- 免費方案每天 600 次請求，基金清單加 `@lru_cache` 避免重複打
+- Token 放環境變數 `FINMIND_TOKEN`，不寫進程式碼
+- 免費方案每次最多回傳 1000 筆，5 年日資料約 1250 筆，需注意是否需要分頁
+
+### 5.5 專案目錄結構
 
 ```
-project/
+fund-analysis/
 ├── backend/
-│   ├── app.py               # Flask/FastAPI 入口
-│   ├── calculators/         # 指標計算模組
-│   └── data/                # 暫存資料（CSV 或 DB）
+│   ├── app.py
+│   ├── data_source.py       ← FinMind API 呼叫集中在此
+│   ├── calculators/
+│   │   ├── __init__.py
+│   │   ├── returns.py
+│   │   ├── risk.py
+│   │   ├── ratios.py
+│   │   └── capm.py
+│   └── requirements.txt
 └── frontend/
-    ├── index.html           # 首頁
-    ├── fund.html            # 單一基金分析頁
-    ├── compare.html         # 投資組合比較頁
+    ├── index.html
+    ├── fund.html
+    ├── compare.html
     ├── css/
     │   └── style.css
     └── js/
-        ├── charts.js        # 圖表邏輯
-        └── api.js           # 呼叫後端 API
+        ├── api.js
+        └── charts.js
 ```
 
 ---
@@ -224,7 +258,7 @@ project/
 
 ---
 
-## 七、MVP 範疇（建議）
+## 七、MVP 範疇
 
 **Phase 1（核心）**
 - 基金搜尋 + 列表頁
@@ -238,17 +272,17 @@ project/
 
 ---
 
-## 八、Q&A — 待確認事項
+## 八、已確認事項（Q&A）
 
-| # | 問題 | 影響範圍 |
-|---|------|----------|
-| 1 | **資料來源是什麼？** 需要提供靜態資料（CSV / Excel）？還是需要串接第三方 API？ | 後端架構、資料庫設計 |
-| 2 | **基金範圍？** 只限台灣境內基金？還是包含境外基金、ETF？ | 資料量、篩選設計 |
-| 3 | **需要使用者帳號系統嗎？** 還是全站公開不需登入？ | 後端複雜度 |
-| 4 | **基準指數用哪個？** 台灣加權指數？S&P 500？讓用戶自選？ | Alpha / Beta 計算邏輯 |
-| 5 | **無風險利率怎麼定？** 固定預設值？還是讓用戶自訂？ | Sharpe / Sortino 計算 |
-| 6 | **比較組合上限幾檔？** 建議 3–5 檔 | UI 設計 |
+| # | 問題 | 決定 |
+|---|------|------|
+| 1 | **資料來源** | FinMind API（`TaiwanMutualFund` + `TaiwanStockPrice`）|
+| 2 | **基金範圍** | 台灣境內基金（FinMind 有的範圍為主） |
+| 3 | **帳號系統** | 全站公開，不需登入 |
+| 4 | **基準指數** | 0050（元大台灣 50），固定不讓用戶選 |
+| 5 | **無風險利率** | 固定 1.5%（台灣 10Y 公債），不開放自訂 |
+| 6 | **比較組合上限** | 最多 5 檔 |
 
 ---
 
-*本文件為初版討論稿*
+*v2：資料來源確認為 FinMind API，更新技術架構章節*
