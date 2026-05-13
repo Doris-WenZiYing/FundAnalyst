@@ -6,45 +6,28 @@ ratios.py — Sharpe / Sortino / Calmar
 def sharpe_ratio(annualized_return: float, rf: float, annualized_std: float) -> float:
     """
     Sharpe Ratio = (Rp - Rf) / σp
-
-    參數：
-      annualized_return: 基金年化報酬率
-      rf:                無風險利率（年化，e.g. 0.015）
-      annualized_std:    年化標準差
-
-    TODO:
-      - 計算 (annualized_return - rf) / annualized_std
-      - 若 annualized_std == 0，回傳 None 或 0
+    annualized_std == 0 時回傳 None（無法計算）
     """
-    # TODO: 實作
-    pass
+    if annualized_return is None or annualized_std is None or annualized_std == 0:
+        return None
+    return (annualized_return - rf) / annualized_std
 
 
 def sortino_ratio(annualized_return: float, rf: float, downside_std: float) -> float:
     """
     Sortino Ratio = (Rp - Rf) / σd
-
-    參數：
-      downside_std: 下行標準差（見 risk.py）
-
-    TODO:
-      - 計算 (annualized_return - rf) / downside_std
-      - 若 downside_std == 0，回傳 None
+    只懲罰下行波動，比 Sharpe 更適合評估防禦型基金
     """
-    # TODO: 實作
-    pass
+    if annualized_return is None or downside_std is None or downside_std == 0:
+        return None
+    return (annualized_return - rf) / downside_std
 
 
 def calmar_ratio(annualized_return: float, mdd: float) -> float:
     """
     Calmar Ratio = 年化報酬率 / |MDD|
-
-    參數：
-      mdd: 最大回檔（負值，e.g. -0.123）
-
-    TODO:
-      - 計算 annualized_return / abs(mdd)
-      - 若 mdd == 0，回傳 None
+    同時衡量報酬與最大損失，數值越高越好
     """
-    # TODO: 實作
-    pass
+    if annualized_return is None or mdd is None or mdd == 0:
+        return None
+    return annualized_return / abs(mdd)

@@ -1,7 +1,5 @@
 """
-app.py（FinMind API）
-把原本 load_data() + get_nav_series() + get_benchmark_series()
-全部換成 data_source.py，其餘路由邏輯不變
+app.py — Flask 後端主程式
 """
 
 from flask import Flask, jsonify, request
@@ -13,16 +11,18 @@ from data_source import (
     get_benchmark_series,
 )
 from calculators.returns import daily_returns, annualized_return, normalize_to_100
-from calculators.risk import annualized_std, downside_std, max_drawdown
-from calculators.ratios import sharpe_ratio, sortino_ratio, calmar_ratio
-from calculators.capm import beta, alpha
+from calculators.risk    import annualized_std, downside_std, max_drawdown
+from calculators.ratios  import sharpe_ratio, sortino_ratio, calmar_ratio
+from calculators.capm    import beta, alpha
+from calculators.scoring import compute_scores, DEFAULT_WEIGHTS
 
-app = Flask(__name__)
+app  = Flask(__name__)
 CORS(app)
 
-RF = 0.015  # 無風險利率
+RF = 0.015  # 無風險利率（台灣 10 年期公債，約 1.5%）
 
 
+# ── 共用：計算單一 ETF 的所有指標 ─────────────
 def compute_metrics(nav, bench, period):
     ret           = daily_returns(nav)
     bench_ret     = daily_returns(bench)
@@ -48,6 +48,7 @@ def compute_metrics(nav, bench, period):
     }
 
 
+# ── GET /funds ─────────────────────────────────
 @app.route("/funds", methods=["GET"])
 def get_funds():
     q     = request.args.get("q", "").lower()
@@ -55,10 +56,11 @@ def get_funds():
     sort  = request.args.get("sort", "")
     limit = request.args.get("limit", type=int)
 
-    df = get_fund_list()  # ← 從 FinMind 拿，其餘邏輯完全一樣
+    df = get_fund_list()
 
     if q:
-        df = df[df["name"].str.lower().str.contains(q) | df["fund_id"].str.contains(q)]
+        df = df[df["name"].str.lower().str.contains(q, na=False) |
+                df["fund_id"].str.lower().str.contains(q, na=False)]
     if ftype:
         df = df[df["type"] == ftype]
     if sort and sort in df.columns:
@@ -69,30 +71,42 @@ def get_funds():
     return jsonify(df.to_dict(orient="records"))
 
 
+# ── GET /funds/<id> ────────────────────────────
 @app.route("/funds/<fund_id>", methods=["GET"])
 def get_fund(fund_id):
-    info = get_fund_info(fund_id)  # ← 從 FinMind 拿
+    info = get_fund_info(fund_id)
     if not info:
-        return jsonify({"error": "找不到基金"}), 404
+        return jsonify({"error": "找不到 ETF"}), 404
     return jsonify(info)
 
 
+# ── GET /funds/<id>/nav ────────────────────────
 @app.route("/funds/<fund_id>/nav", methods=["GET"])
 def get_fund_nav(fund_id):
     period = request.args.get("period", "3Y")
-    nav    = get_nav_series(fund_id, period)   # ← 從 FinMind 拿
-    bench  = get_benchmark_series(period)       # ← 從 FinMind 拿
+    nav    = get_nav_series(fund_id, period)
+    bench  = get_benchmark_series(period)
 
     if nav.empty:
         return jsonify({"error": "無 NAV 資料"}), 404
 
     return jsonify({
-        "fund":                [{"date": str(d.date()), "nav": round(v, 4)} for d, v in nav.items()],
-        "fund_normalized":     [{"date": str(d.date()), "value": round(v, 4)} for d, v in normalize_to_100(nav).items()],
-        "benchmark_normalized":[{"date": str(d.date()), "value": round(v, 4)} for d, v in normalize_to_100(bench).items()] if not bench.empty else [],
+        "fund": [
+            {"date": str(d.date()), "nav": round(v, 4)}
+            for d, v in nav.items()
+        ],
+        "fund_normalized": [
+            {"date": str(d.date()), "value": round(v, 4)}
+            for d, v in normalize_to_100(nav).items()
+        ],
+        "benchmark_normalized": [
+            {"date": str(d.date()), "value": round(v, 4)}
+            for d, v in normalize_to_100(bench).items()
+        ] if not bench.empty else [],
     })
 
 
+# ── GET /funds/<id>/metrics ────────────────────
 @app.route("/funds/<fund_id>/metrics", methods=["GET"])
 def get_fund_metrics(fund_id):
     period = request.args.get("period", "3Y")
@@ -107,6 +121,7 @@ def get_fund_metrics(fund_id):
     return jsonify(compute_metrics(nav, bench, period))
 
 
+# ── POST /compare ──────────────────────────────
 @app.route("/compare", methods=["POST"])
 def compare_funds():
     body     = request.get_json()
@@ -125,9 +140,9 @@ def compare_funds():
         if nav.empty:
             continue
         results.append({
-            "id":       fid,
-            "name":     info["name"] if info else fid,
-            "metrics":  compute_metrics(nav, bench, period),
+            "id":   fid,
+            "name": info["name"] if info else fid,
+            "metrics": compute_metrics(nav, bench, period),
             "nav_series": [
                 {"date": str(d.date()), "normalized": round(v, 4)}
                 for d, v in normalize_to_100(nav).items()
@@ -135,6 +150,61 @@ def compare_funds():
         })
 
     return jsonify({"period": period, "funds": results})
+
+
+# ── POST /score ────────────────────────────────
+@app.route("/score", methods=["POST"])
+def score_funds():
+    """
+    多準則評選模型
+    body: {
+      "period": "3Y",
+      "weights": {
+        "return":    {"dimension_weight": 0.33, "metrics": {"annualized_return": 0.6, "alpha": 0.4}},
+        "risk":      {"dimension_weight": 0.34, "metrics": {"mdd": 0.4, "beta": 0.3, "annualized_std": 0.3}},
+        "stability": {"dimension_weight": 0.33, "metrics": {"sharpe": 0.4, "sortino": 0.35, "calmar": 0.25}}
+      }
+    }
+    """
+    body    = request.get_json() or {}
+    period  = body.get("period", "3Y")
+    weights = body.get("weights", DEFAULT_WEIGHTS)
+
+    bench   = get_benchmark_series(period)
+    if bench.empty:
+        return jsonify({"error": "無法取得基準指數資料"}), 500
+
+    fund_list = get_fund_list().to_dict(orient="records")
+    funds_metrics = []
+
+    for fund in fund_list:
+        fid = fund["fund_id"]
+        try:
+            nav = get_nav_series(fid, period)
+            if nav.empty:
+                continue
+            m = compute_metrics(nav, bench, period)
+            funds_metrics.append({
+                "fund_id": fid,
+                "name":    fund["name"],
+                "metrics": m,
+            })
+        except Exception as e:
+            app.logger.warning(f"計算 {fid} 失敗：{e}")
+            continue
+
+    if not funds_metrics:
+        return jsonify({"error": "無法計算任何 ETF 的指標"}), 500
+
+    rankings = compute_scores(funds_metrics, weights)
+    return jsonify({"period": period, "rankings": rankings})
+
+
+# ── GET /score/defaults ────────────────────────
+@app.route("/score/defaults", methods=["GET"])
+def score_defaults():
+    """回傳預設權重設定，讓前端初始化 slider 用"""
+    return jsonify(DEFAULT_WEIGHTS)
 
 
 if __name__ == "__main__":

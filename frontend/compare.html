@@ -3,52 +3,52 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>投資組合比較 — FundLens</title>
+  <title>組合比較 — FundLens</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
 
-  <!-- ── Header ──────────────────────────────────── -->
   <header class="site-header">
     <div class="container header-inner">
-      <a href="index.html" class="logo">FundLens</a>
+      <a href="index.html" class="logo">Fund<span>Lens</span></a>
       <nav class="main-nav">
         <a href="index.html">首頁</a>
-        <a href="compare.html" class="active">投資組合比較</a>
+        <a href="compare.html" class="active">組合比較</a>
+        <a href="score.html">評分排名</a>
       </nav>
     </div>
   </header>
 
   <main class="container page-main">
 
-    <!-- ── 比較清單列 ────────────────────────────── -->
     <div class="compare-bar">
-      <h1 class="compare-bar-title">投資組合比較</h1>
+      <h1 class="compare-bar-title">組合比較</h1>
       <div id="compareChips" class="compare-chips"></div>
       <div class="compare-bar-actions">
-        <button id="addFundBtn" class="btn btn-outline">＋ 新增基金</button>
+        <button id="addFundBtn" class="btn btn-outline">＋ 新增 ETF</button>
         <button id="runCompareBtn" class="btn btn-primary">開始比較</button>
       </div>
     </div>
 
-    <!-- ── 新增基金 Modal ──────────────────────── -->
+    <!-- Modal -->
     <div id="addFundModal" class="modal hidden">
       <div class="modal-inner">
-        <h3>搜尋並加入基金</h3>
+        <h3>搜尋並加入 ETF</h3>
         <input type="text" id="modalSearch" class="search-input" placeholder="輸入名稱或代號..." />
         <div id="modalResults" class="modal-results"></div>
         <button id="closeModalBtn" class="btn btn-ghost">關閉</button>
       </div>
     </div>
 
-    <!-- ── 空狀態 ────────────────────────────────── -->
     <div id="emptyState" class="empty-state">
-      <p>請加入 2 檔以上基金，再點「開始比較」</p>
-      <p style="margin-top:8px;font-size:0.85rem;color:#9CA3AF">你也可以從基金分析頁按「＋ 加入比較」</p>
+      <p>請加入 2 檔以上 ETF，再點「開始比較」</p>
+      <p style="margin-top:8px;font-size:0.82rem;color:var(--text-muted)">也可以從 ETF 分析頁按「＋ 加入比較」</p>
     </div>
 
-    <!-- ── 比較結果區 ────────────────────────────── -->
     <div id="compareResult" class="hidden">
 
       <div class="period-tabs" id="comparePeriodTabs">
@@ -57,8 +57,7 @@
         <button class="period-btn" data-period="5Y">5Y</button>
       </div>
 
-      <!-- 走勢疊圖 + 雷達圖 -->
-      <div class="layout-two-col" style="margin-bottom:20px">
+      <div class="layout-two-col" style="margin-bottom:16px">
         <div class="card chart-card">
           <h3 class="card-title">報酬走勢比較（起點 = 100）</h3>
           <canvas id="overlayChart" height="220"></canvas>
@@ -69,7 +68,6 @@
         </div>
       </div>
 
-      <!-- 指標對比表格 -->
       <div class="card">
         <h3 class="card-title">指標對比</h3>
         <div class="table-wrapper">
@@ -79,13 +77,14 @@
           </table>
         </div>
       </div>
+
     </div>
 
   </main>
 
   <footer class="site-footer">
     <div class="container">
-      <p>本平台資料來源為 FinMind，僅供學術研究參考，不構成投資建議。</p>
+      <p>資料來源：FinMind｜本平台僅供學術研究，不構成投資建議</p>
     </div>
   </footer>
 
@@ -94,9 +93,8 @@
   <script>
     let currentPeriod = "3Y";
 
-    // ── 渲染比較清單 chips ──────────────────────
     function renderChips() {
-      const list = getCompareList();
+      const list  = getCompareList();
       const chips = document.getElementById("compareChips");
       chips.innerHTML = list.map(f => `
         <span class="chip">
@@ -110,7 +108,6 @@
       renderChips();
     }
 
-    // ── Modal 搜尋 ──────────────────────────────
     let modalTimer = null;
     document.getElementById("modalSearch").addEventListener("input", (e) => {
       clearTimeout(modalTimer);
@@ -119,12 +116,15 @@
       modalTimer = setTimeout(async () => {
         try {
           const funds = await getFunds({ q, limit: 8 });
-          document.getElementById("modalResults").innerHTML = funds.map(f => `
-            <div class="modal-result-item" onclick="addFromModal('${f.fund_id}', '${(f.name||'').replace(/'/g,"\\'")}')">
-              <strong>${f.name || f.fund_id}</strong>
-              <span>${f.company || ""}</span>
-            </div>`).join("") || "<p class='placeholder-text'>找不到結果</p>";
-        } catch { document.getElementById("modalResults").innerHTML = "<p class='error-msg'>搜尋失敗</p>"; }
+          document.getElementById("modalResults").innerHTML =
+            funds.map(f => `
+              <div class="modal-result-item" onclick="addFromModal('${f.fund_id}','${(f.name||'').replace(/'/g,"\\'")}')">
+                <strong>${f.name || f.fund_id}</strong>
+                <span>${f.company || ""}</span>
+              </div>`).join("") || "<p class='placeholder-text' style='padding:12px'>找不到結果</p>";
+        } catch {
+          document.getElementById("modalResults").innerHTML = "<p class='error-msg' style='padding:12px'>搜尋失敗</p>";
+        }
       }, 300);
     });
 
@@ -144,88 +144,63 @@
       document.getElementById("addFundModal").classList.add("hidden");
     });
 
-    // ── 渲染對比表格 ────────────────────────────
     const METRIC_ROWS = [
-      { key: "annualized_return", label: "年化報酬",   format: v => fmt(v, "pct"),   higher: true  },
-      { key: "sharpe",            label: "Sharpe",      format: v => fmt(v, "ratio"), higher: true  },
-      { key: "sortino",           label: "Sortino",     format: v => fmt(v, "ratio"), higher: true  },
-      { key: "calmar",            label: "Calmar",      format: v => fmt(v, "ratio"), higher: true  },
-      { key: "mdd",               label: "MDD",         format: v => fmt(v, "pct"),   higher: false },
-      { key: "beta",              label: "Beta",        format: v => fmt(v, "ratio"), higher: null  },
-      { key: "alpha",             label: "Alpha",       format: v => fmt(v, "pct2"),  higher: true  },
-      { key: "annualized_std",    label: "年化波動率",  format: v => fmt(v, "pct"),   higher: false },
+      { key: "annualized_return", label: "年化報酬",  format: v => fmt(v,"pct"),   higher: true  },
+      { key: "sharpe",            label: "Sharpe",    format: v => fmt(v,"ratio"), higher: true  },
+      { key: "sortino",           label: "Sortino",   format: v => fmt(v,"ratio"), higher: true  },
+      { key: "calmar",            label: "Calmar",    format: v => fmt(v,"ratio"), higher: true  },
+      { key: "mdd",               label: "MDD",       format: v => fmt(v,"pct"),   higher: false },
+      { key: "beta",              label: "Beta",      format: v => fmt(v,"ratio"), higher: null  },
+      { key: "alpha",             label: "Alpha",     format: v => fmt(v,"pct2"),  higher: true  },
+      { key: "annualized_std",    label: "年化波動率",format: v => fmt(v,"pct"),   higher: false },
     ];
 
     function renderCompareTable(funds) {
-      const thead = document.getElementById("compareTableHead");
-      const tbody = document.getElementById("compareTableBody");
-
-      thead.innerHTML = `<tr>
+      document.getElementById("compareTableHead").innerHTML = `<tr>
         <th>指標</th>
         ${funds.map(f => `<th>${f.name}</th>`).join("")}
       </tr>`;
 
-      tbody.innerHTML = METRIC_ROWS.map(row => {
-        const vals = funds.map(f => f.metrics[row.key]);
+      document.getElementById("compareTableBody").innerHTML = METRIC_ROWS.map(row => {
+        const vals    = funds.map(f => f.metrics[row.key]);
         const numVals = vals.filter(v => v != null);
-        const best = row.higher === true  ? Math.max(...numVals)
-                   : row.higher === false ? Math.min(...numVals)
-                   : null;
-        const worst = row.higher === true  ? Math.min(...numVals)
-                    : row.higher === false ? Math.max(...numVals)
-                    : null;
+        const best    = row.higher === true  ? Math.max(...numVals) : row.higher === false ? Math.min(...numVals) : null;
+        const worst   = row.higher === true  ? Math.min(...numVals) : row.higher === false ? Math.max(...numVals) : null;
 
         return `<tr>
-          <td><strong>${row.label}</strong></td>
+          <td><strong style="color:var(--text-sub);font-size:0.82rem">${row.label}</strong></td>
           ${vals.map(v => {
             let cls = "";
             if (row.higher !== null && v != null) {
               if (v === best)  cls = "val-good";
               if (v === worst) cls = "val-bad";
             }
-            return `<td class="${cls}">${row.format(v)}</td>`;
+            return `<td class="mono ${cls}">${row.format(v)}</td>`;
           }).join("")}
         </tr>`;
       }).join("");
     }
 
-    // ── 執行比較 ────────────────────────────────
     async function runCompare(period) {
       const list = getCompareList();
-      if (list.length < 2) {
-        alert("請先加入至少 2 檔基金");
-        return;
-      }
+      if (list.length < 2) { alert("請先加入至少 2 檔 ETF"); return; }
       document.getElementById("emptyState").classList.add("hidden");
       document.getElementById("compareResult").classList.remove("hidden");
       document.getElementById("compareTableBody").innerHTML =
-        `<tr><td colspan="${list.length + 1}" class="placeholder-text">計算中...</td></tr>`;
+        `<tr><td colspan="${list.length + 1}" class="placeholder-text" style="padding:20px">計算中...</td></tr>`;
 
       try {
-        const data = await compareFunds(list.map(f => f.id), period);
+        const data  = await compareFunds(list.map(f => f.id), period);
         const funds = data.funds;
-
-        // 走勢疊圖
-        drawOverlayChart("overlayChart", funds.map(f => ({
-          name: f.name,
-          series: f.nav_series,
-        })));
-
-        // 雷達圖
-        drawRadarChart("radarChart", funds.map(f => ({
-          name: f.name,
-          metrics: f.metrics,
-        })));
-
-        // 對比表格
+        drawOverlayChart("overlayChart", funds.map(f => ({ name: f.name, series: f.nav_series })));
+        drawRadarChart("radarChart", funds.map(f => ({ name: f.name, metrics: f.metrics })));
         renderCompareTable(funds);
       } catch (e) {
         document.getElementById("compareTableBody").innerHTML =
-          `<tr><td colspan="10" class="error-msg">⚠️ ${e.message}</td></tr>`;
+          `<tr><td colspan="10" class="error-msg" style="padding:16px">⚠️ ${e.message}</td></tr>`;
       }
     }
 
-    // ── 事件綁定 ────────────────────────────────
     document.getElementById("runCompareBtn").addEventListener("click", () => runCompare(currentPeriod));
 
     document.getElementById("comparePeriodTabs").addEventListener("click", (e) => {
@@ -237,7 +212,6 @@
       runCompare(currentPeriod);
     });
 
-    // ── 初始化 ──────────────────────────────────
     renderChips();
     if (getCompareList().length < 2) {
       document.getElementById("emptyState").classList.remove("hidden");

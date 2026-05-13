@@ -8,54 +8,46 @@ import pandas as pd
 
 def annualized_std(daily_returns: pd.Series, periods_per_year: int = 252) -> float:
     """
-    計算年化標準差（波動率）
+    年化標準差（波動率）
     公式：日標準差 × √252
-
-    TODO:
-      - 計算 daily_returns 的標準差
-      - 乘以 sqrt(periods_per_year)
-      - 回傳浮點數（e.g. 0.124 代表 12.4%）
     """
-    # TODO: 實作
-    pass
+    if daily_returns is None or len(daily_returns) < 2:
+        return None
+    return float(daily_returns.std() * np.sqrt(periods_per_year))
 
 
 def downside_std(daily_returns: pd.Series, rf_daily: float = 0.0, periods_per_year: int = 252) -> float:
     """
-    計算下行標準差（只計算低於無風險利率的部分）
-    用於 Sortino Ratio 分母
-
-    TODO:
-      - 篩選 daily_returns < rf_daily 的部分
-      - 計算這部分的標準差
-      - 年化（× √252）
-      - 若沒有負報酬日，回傳極小值避免除以 0
+    下行標準差：只計算低於無風險利率的部分，用於 Sortino 分母
+    若沒有任何負報酬日，回傳極小值避免除以 0
     """
-    # TODO: 實作
-    pass
+    if daily_returns is None or daily_returns.empty:
+        return 1e-10
+    downside = daily_returns[daily_returns < rf_daily]
+    if downside.empty or len(downside) < 2:
+        return 1e-10
+    return float(downside.std() * np.sqrt(periods_per_year))
 
 
 def max_drawdown(nav_series: pd.Series) -> float:
     """
-    計算最大回檔（MDD）
+    最大回檔（MDD）
     公式：min((谷底 - 前高) / 前高)
-
-    TODO:
-      - 計算滾動最高點：nav_series.cummax()
-      - 計算每日回檔：(nav - 前高) / 前高
-      - 取最小值即為 MDD
-      - 回傳負值（e.g. -0.123 代表 -12.3%）
+    回傳負值，e.g. -0.123 代表 -12.3%
     """
-    # TODO: 實作
-    pass
+    if nav_series is None or len(nav_series) < 2:
+        return None
+    rolling_max = nav_series.cummax()
+    drawdown    = (nav_series - rolling_max) / rolling_max
+    return float(drawdown.min())
 
 
 def drawdown_series(nav_series: pd.Series) -> pd.Series:
     """
-    回傳完整的回檔序列（供 Area Chart 視覺化用）
-
-    TODO:
-      - 同 max_drawdown 邏輯，但回傳整條序列而不是最小值
+    完整回檔序列（供 Area Chart 視覺化用）
+    每個時間點相對前高的跌幅
     """
-    # TODO: 實作
-    pass
+    if nav_series is None or nav_series.empty:
+        return pd.Series(dtype=float)
+    rolling_max = nav_series.cummax()
+    return (nav_series - rolling_max) / rolling_max

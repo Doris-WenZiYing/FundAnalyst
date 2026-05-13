@@ -3,24 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>基金分析 — FundLens</title>
+  <title>ETF 分析 — FundLens</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
 
-  <!-- ── Header ─────────────────────────────────── -->
   <header class="site-header">
     <div class="container header-inner">
-      <a href="index.html" class="logo">FundLens</a>
+      <a href="index.html" class="logo">Fund<span>Lens</span></a>
       <nav class="main-nav">
         <a href="index.html">首頁</a>
-        <a href="compare.html">投資組合比較</a>
+        <a href="compare.html">組合比較</a>
+        <a href="score.html">評分排名</a>
       </nav>
     </div>
   </header>
 
-  <!-- ── 基金標題列 ───────────────────────────────── -->
   <div class="fund-title-bar">
     <div class="container fund-title-inner">
       <div>
@@ -33,7 +35,6 @@
 
   <main class="container page-main">
 
-    <!-- ── 上半：NAV 圖 + 基本資訊 ─────────────── -->
     <div class="layout-two-col">
       <div class="card chart-card">
         <div class="period-tabs" id="navPeriodTabs">
@@ -47,18 +48,17 @@
       <div class="card info-card">
         <h3 class="card-title">基本資訊</h3>
         <dl class="info-list">
-          <dt>基金公司</dt><dd id="infoCompany">—</dd>
-          <dt>基金類型</dt><dd id="infoType">—</dd>
+          <dt>投信公司</dt><dd id="infoCompany">—</dd>
+          <dt>類型</dt><dd id="infoType">—</dd>
           <dt>風險等級</dt><dd id="infoRisk">—</dd>
           <dt>基金規模</dt><dd id="infoAum">—</dd>
-          <dt>經理費率</dt><dd id="infoExpense">—</dd>
-          <dt>最新 NAV</dt><dd id="infoNav">—</dd>
+          <dt>費用率</dt><dd id="infoExpense">—</dd>
+          <dt>最新收盤</dt><dd id="infoNav">—</dd>
           <dt>資料日期</dt><dd id="infoNavDate">—</dd>
         </dl>
       </div>
     </div>
 
-    <!-- ── 風險指標區 ─────────────────────────────── -->
     <section class="metrics-section">
       <h2 class="section-title">
         風險指標
@@ -69,9 +69,8 @@
       </div>
     </section>
 
-    <!-- ── 與基準指數比較圖 ─────────────────────── -->
     <section class="benchmark-section">
-      <h2 class="section-title">與基準指數（0050）比較</h2>
+      <h2 class="section-title">與 0050 比較（起點 = 100）</h2>
       <div class="card">
         <canvas id="benchmarkChart" height="200"></canvas>
       </div>
@@ -81,49 +80,50 @@
 
   <footer class="site-footer">
     <div class="container">
-      <p>本平台資料來源為 FinMind，僅供學術研究參考，不構成投資建議。</p>
+      <p>資料來源：FinMind｜本平台僅供學術研究，不構成投資建議</p>
     </div>
   </footer>
 
   <script src="js/api.js"></script>
   <script src="js/charts.js"></script>
   <script>
-    // ── 從 URL 取 fund_id ────────────────────────
-    const params = new URLSearchParams(location.search);
+    const params  = new URLSearchParams(location.search);
     const FUND_ID = params.get("id");
-    if (!FUND_ID) { document.body.innerHTML = "<p style='padding:40px'>缺少基金 ID，請從首頁進入。</p>"; }
+    if (!FUND_ID) {
+      document.body.innerHTML = `
+        <div style="padding:80px;text-align:center;color:var(--text-muted)">
+          <p style="font-size:1.1rem;margin-bottom:12px">缺少 ETF 代號</p>
+          <a href="index.html" style="color:var(--gold)">← 回首頁</a>
+        </div>`;
+    }
 
     let currentPeriod = "3Y";
 
-    // ── 載入基本資訊 ────────────────────────────
     async function loadFundInfo() {
       try {
         const f = await getFund(FUND_ID);
         document.title = `${f.name || FUND_ID} — FundLens`;
         document.getElementById("fundName").textContent = f.name || FUND_ID;
         document.getElementById("fundMeta").textContent =
-          [f.company, f.type].filter(Boolean).join(" · ");
-        document.getElementById("infoCompany").textContent  = f.company || "—";
-        document.getElementById("infoType").textContent     = f.type    || "—";
+          [f.company, f.type, f.fund_id].filter(Boolean).join("  ·  ");
+        document.getElementById("infoCompany").textContent  = f.company      || "—";
+        document.getElementById("infoType").textContent     = f.type         || "—";
         document.getElementById("infoRisk").textContent     = f.risk_level ? `RR${f.risk_level}` : "—";
         document.getElementById("infoAum").textContent      = f.aum != null ? `${Number(f.aum).toFixed(1)} 億` : "—";
         document.getElementById("infoExpense").textContent  = f.expense_ratio != null ? `${f.expense_ratio}%` : "—";
-        document.getElementById("infoNav").textContent      = f.nav != null ? Number(f.nav).toFixed(4) : "—";
+        document.getElementById("infoNav").textContent      = f.nav != null ? Number(f.nav).toFixed(2) : "—";
         document.getElementById("infoNavDate").textContent  = f.nav_date || "—";
 
-        // 加入比較按鈕
         document.getElementById("addToCompareBtn").addEventListener("click", () => {
           const added = addToCompare(FUND_ID, f.name || FUND_ID);
           if (added) alert(`已將「${f.name}」加入比較清單`);
-          else alert("此基金已在比較清單中");
+          else       alert("此 ETF 已在比較清單中");
         });
       } catch (e) {
         document.getElementById("fundName").textContent = "載入失敗";
-        console.error(e);
       }
     }
 
-    // ── 載入 NAV 圖表 ────────────────────────────
     async function loadNavChart(period) {
       try {
         const data = await getFundNav(FUND_ID, period);
@@ -141,7 +141,6 @@
       }
     }
 
-    // ── 載入指標卡 ──────────────────────────────
     async function loadMetrics(period) {
       const grid = document.getElementById("metricsGrid");
       document.getElementById("metricsPeriodLabel").textContent = `（${period}）`;
@@ -154,7 +153,6 @@
       }
     }
 
-    // ── 期間切換 ────────────────────────────────
     document.getElementById("navPeriodTabs").addEventListener("click", (e) => {
       const btn = e.target.closest(".period-btn");
       if (!btn) return;
@@ -165,7 +163,6 @@
       loadMetrics(currentPeriod);
     });
 
-    // ── 初始化 ──────────────────────────────────
     if (FUND_ID) {
       loadFundInfo();
       loadNavChart(currentPeriod);

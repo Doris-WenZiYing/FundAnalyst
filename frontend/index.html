@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FundLens — 基金分析平台</title>
+  <title>FundLens — ETF 風險分析平台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -11,57 +14,57 @@
   <!-- ── Header ─────────────────────────────────── -->
   <header class="site-header">
     <div class="container header-inner">
-      <a href="index.html" class="logo">FundLens</a>
+      <a href="index.html" class="logo">Fund<span>Lens</span></a>
       <nav class="main-nav">
         <a href="index.html" class="active">首頁</a>
-        <a href="compare.html">投資組合比較</a>
+        <a href="compare.html">組合比較</a>
+        <a href="score.html">評分排名</a>
       </nav>
     </div>
   </header>
 
-  <!-- ── Hero 搜尋區 ──────────────────────────────── -->
+  <!-- ── Hero ──────────────────────────────────── -->
   <section class="hero">
     <div class="container">
-      <h1 class="hero-title">找到真正抗風險的基金</h1>
-      <p class="hero-sub">以 Sharpe Ratio、MDD、Alpha 等風險調整指標，客觀評估每一檔基金</p>
+      <h1 class="hero-title">看穿風險，<em>選對 ETF</em></h1>
+      <p class="hero-sub">以 Sharpe Ratio、MDD、Alpha 等風險調整指標客觀評估每一檔 ETF，不只看報酬</p>
       <div class="search-bar">
-        <input type="text" id="searchInput" class="search-input" placeholder="輸入基金名稱或代號..." />
+        <input type="text" id="searchInput" class="search-input" placeholder="輸入 ETF 名稱或代號，例如 0050..." />
         <button id="searchBtn" class="btn btn-primary">搜尋</button>
       </div>
     </div>
   </section>
 
-  <!-- ── 高 Sharpe 排行 ──────────────────────────── -->
+  <!-- ── 熱門 ETF ────────────────────────────────── -->
   <section class="section">
     <div class="container">
-      <h2 class="section-title">高 Sharpe Ratio 排行（3Y）</h2>
+      <h2 class="section-title">熱門 ETF</h2>
       <div id="topFundsGrid" class="funds-grid">
         <p class="placeholder-text">載入中...</p>
       </div>
     </div>
   </section>
 
-  <!-- ── 所有基金列表 ────────────────────────────── -->
+  <!-- ── 所有 ETF ────────────────────────────────── -->
   <section class="section section-alt">
     <div class="container">
-      <h2 class="section-title">所有基金</h2>
+      <h2 class="section-title">所有 ETF</h2>
       <div class="filter-bar">
         <select id="typeFilter" class="filter-select">
           <option value="">全部類型</option>
           <option value="股票型">股票型</option>
           <option value="債券型">債券型</option>
-          <option value="平衡型">平衡型</option>
-          <option value="貨幣型">貨幣型</option>
+          <option value="海外股票型">海外股票型</option>
         </select>
       </div>
       <div class="table-wrapper">
         <table class="funds-table">
           <thead>
             <tr>
-              <th>基金名稱</th>
-              <th>公司</th>
+              <th>ETF 名稱</th>
+              <th>投信</th>
               <th>類型</th>
-              <th>最新 NAV</th>
+              <th>最新收盤</th>
               <th></th>
             </tr>
           </thead>
@@ -75,13 +78,12 @@
 
   <footer class="site-footer">
     <div class="container">
-      <p>本平台資料來源為 FinMind，僅供學術研究參考，不構成投資建議。</p>
+      <p>資料來源：FinMind｜本平台僅供學術研究，不構成投資建議</p>
     </div>
   </footer>
 
   <script src="js/api.js"></script>
   <script>
-    // ── 渲染排行榜卡片 ──────────────────────────
     function renderTopFundCard(fund) {
       const sharpe = fund.sharpe != null ? Number(fund.sharpe).toFixed(2) : "—";
       return `
@@ -89,29 +91,31 @@
           <div class="fund-card-name">${fund.name || fund.fund_id}</div>
           <div class="fund-card-company">${fund.company || ""}</div>
           <div class="fund-card-metrics">
-            <span class="metric-badge">Sharpe <strong>${sharpe}</strong></span>
+            <span class="metric-badge">${fund.fund_id}</span>
+            <span class="metric-badge">${fund.type || ""}</span>
           </div>
         </div>`;
     }
 
-    // ── 渲染基金列表列 ──────────────────────────
     function renderFundRow(fund) {
-      const nav = fund.nav != null ? Number(fund.nav).toFixed(4) : "—";
+      const nav = fund.nav != null ? Number(fund.nav).toFixed(2) : "—";
       return `
         <tr onclick="location.href='fund.html?id=${fund.fund_id}'" style="cursor:pointer">
-          <td><strong>${fund.name || fund.fund_id}</strong></td>
-          <td>${fund.company || "—"}</td>
-          <td>${fund.type || "—"}</td>
+          <td>
+            <strong>${fund.name || fund.fund_id}</strong>
+            <span style="color:var(--text-muted);font-size:0.78rem;margin-left:8px">${fund.fund_id}</span>
+          </td>
+          <td style="color:var(--text-sub)">${fund.company || "—"}</td>
+          <td><span class="tag">${fund.type || "—"}</span></td>
           <td class="mono">${nav}</td>
-          <td><a href="fund.html?id=${fund.fund_id}" class="btn-link">查看分析 →</a></td>
+          <td><a href="fund.html?id=${fund.fund_id}" class="btn-link">分析 →</a></td>
         </tr>`;
     }
 
-    // ── 載入排行榜 ──────────────────────────────
     async function loadTopFunds() {
       const grid = document.getElementById("topFundsGrid");
       try {
-        const funds = await getFunds({ sort: "sharpe", limit: 5 });
+        const funds = await getFunds({ limit: 6 });
         if (!funds.length) { grid.innerHTML = "<p class='placeholder-text'>暫無資料</p>"; return; }
         grid.innerHTML = funds.map(renderTopFundCard).join("");
       } catch (e) {
@@ -119,14 +123,13 @@
       }
     }
 
-    // ── 載入基金列表 ────────────────────────────
     async function loadFunds(params = {}) {
       const tbody = document.getElementById("fundsTableBody");
       tbody.innerHTML = `<tr><td colspan="5" class="placeholder-text">載入中...</td></tr>`;
       try {
         const funds = await getFunds(params);
         if (!funds.length) {
-          tbody.innerHTML = `<tr><td colspan="5" class="placeholder-text">找不到符合的基金</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="5" class="placeholder-text">找不到符合的 ETF</td></tr>`;
           return;
         }
         tbody.innerHTML = funds.map(renderFundRow).join("");
@@ -135,9 +138,8 @@
       }
     }
 
-    // ── 事件綁定 ────────────────────────────────
     document.getElementById("searchBtn").addEventListener("click", () => {
-      const q = document.getElementById("searchInput").value.trim();
+      const q    = document.getElementById("searchInput").value.trim();
       const type = document.getElementById("typeFilter").value;
       loadFunds({ q, type });
     });
@@ -147,12 +149,11 @@
     });
 
     document.getElementById("typeFilter").addEventListener("change", () => {
-      const q = document.getElementById("searchInput").value.trim();
+      const q    = document.getElementById("searchInput").value.trim();
       const type = document.getElementById("typeFilter").value;
       loadFunds({ q, type });
     });
 
-    // ── 初始化 ──────────────────────────────────
     loadTopFunds();
     loadFunds();
   </script>
