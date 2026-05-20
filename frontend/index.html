@@ -19,6 +19,7 @@
         <a href="index.html" class="active">首頁</a>
         <a href="compare.html">組合比較</a>
         <a href="score.html">評分排名</a>
+        <a href="allocate.html">資產配置</a>
       </nav>
     </div>
   </header>
@@ -85,14 +86,13 @@
   <script src="js/api.js"></script>
   <script>
     function renderTopFundCard(fund) {
-      const sharpe = fund.sharpe != null ? Number(fund.sharpe).toFixed(2) : "—";
       return `
         <div class="fund-card" onclick="location.href='fund.html?id=${fund.fund_id}'">
           <div class="fund-card-name">${fund.name || fund.fund_id}</div>
           <div class="fund-card-company">${fund.company || ""}</div>
           <div class="fund-card-metrics">
             <span class="metric-badge">${fund.fund_id}</span>
-            <span class="metric-badge">${fund.type || ""}</span>
+            <span class="metric-badge">${fund.type || "ETF"}</span>
           </div>
         </div>`;
     }

@@ -44,7 +44,7 @@ export FINMIND_TOKEN="貼上你的token"
 
 # Step 4：進 backend 啟動 Flask
 cd backend
-python3 app_finmind.py
+python3 app.py
 ```
 
 看到以下訊息代表後端正常：

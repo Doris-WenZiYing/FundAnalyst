@@ -1,28 +1,27 @@
 """
-app.py — Flask 後端主程式
+app.py — Flask 後端
 """
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from data_source import (
-    get_fund_list,
-    get_fund_info,
-    get_nav_series,
-    get_benchmark_series,
+    get_fund_list, get_fund_info,
+    get_nav_series, get_benchmark_series,
 )
 from calculators.returns import daily_returns, annualized_return, normalize_to_100
 from calculators.risk    import annualized_std, downside_std, max_drawdown
 from calculators.ratios  import sharpe_ratio, sortino_ratio, calmar_ratio
 from calculators.capm    import beta, alpha
 from calculators.scoring import compute_scores, DEFAULT_WEIGHTS
+from calculators.mvo     import max_sharpe, min_volatility, efficient_frontier, equal_weight_metrics
+from calculators.backtest import run_backtest
 
 app  = Flask(__name__)
 CORS(app)
+RF   = 0.015
 
-RF = 0.015  # 無風險利率（台灣 10 年期公債，約 1.5%）
 
-
-# ── 共用：計算單一 ETF 的所有指標 ─────────────
+# ── 共用：計算單一 ETF 指標 ───────────────────────
 def compute_metrics(nav, bench, period):
     ret           = daily_returns(nav)
     bench_ret     = daily_returns(bench)
@@ -57,7 +56,6 @@ def get_funds():
     limit = request.args.get("limit", type=int)
 
     df = get_fund_list()
-
     if q:
         df = df[df["name"].str.lower().str.contains(q, na=False) |
                 df["fund_id"].str.lower().str.contains(q, na=False)]
@@ -91,18 +89,12 @@ def get_fund_nav(fund_id):
         return jsonify({"error": "無 NAV 資料"}), 404
 
     return jsonify({
-        "fund": [
-            {"date": str(d.date()), "nav": round(v, 4)}
-            for d, v in nav.items()
-        ],
-        "fund_normalized": [
-            {"date": str(d.date()), "value": round(v, 4)}
-            for d, v in normalize_to_100(nav).items()
-        ],
-        "benchmark_normalized": [
-            {"date": str(d.date()), "value": round(v, 4)}
-            for d, v in normalize_to_100(bench).items()
-        ] if not bench.empty else [],
+        "fund": [{"date": str(d.date()), "nav": round(v, 4)} for d, v in nav.items()],
+        "fund_normalized": [{"date": str(d.date()), "value": round(v, 4)}
+                            for d, v in normalize_to_100(nav).items()],
+        "benchmark_normalized": [{"date": str(d.date()), "value": round(v, 4)}
+                                  for d, v in normalize_to_100(bench).items()]
+                                 if not bench.empty else [],
     })
 
 
@@ -133,7 +125,6 @@ def compare_funds():
 
     bench   = get_benchmark_series(period)
     results = []
-
     for fid in fund_ids:
         nav  = get_nav_series(fid, period)
         info = get_fund_info(fid)
@@ -142,11 +133,9 @@ def compare_funds():
         results.append({
             "id":   fid,
             "name": info["name"] if info else fid,
-            "metrics": compute_metrics(nav, bench, period),
-            "nav_series": [
-                {"date": str(d.date()), "normalized": round(v, 4)}
-                for d, v in normalize_to_100(nav).items()
-            ],
+            "metrics":    compute_metrics(nav, bench, period),
+            "nav_series": [{"date": str(d.date()), "normalized": round(v, 4)}
+                           for d, v in normalize_to_100(nav).items()],
         })
 
     return jsonify({"period": period, "funds": results})
@@ -155,56 +144,145 @@ def compare_funds():
 # ── POST /score ────────────────────────────────
 @app.route("/score", methods=["POST"])
 def score_funds():
-    """
-    多準則評選模型
-    body: {
-      "period": "3Y",
-      "weights": {
-        "return":    {"dimension_weight": 0.33, "metrics": {"annualized_return": 0.6, "alpha": 0.4}},
-        "risk":      {"dimension_weight": 0.34, "metrics": {"mdd": 0.4, "beta": 0.3, "annualized_std": 0.3}},
-        "stability": {"dimension_weight": 0.33, "metrics": {"sharpe": 0.4, "sortino": 0.35, "calmar": 0.25}}
-      }
-    }
-    """
     body    = request.get_json() or {}
     period  = body.get("period", "3Y")
     weights = body.get("weights", DEFAULT_WEIGHTS)
 
-    bench   = get_benchmark_series(period)
+    bench = get_benchmark_series(period)
     if bench.empty:
-        return jsonify({"error": "無法取得基準指數資料"}), 500
+        return jsonify({"error": "無法取得基準指數"}), 500
 
-    fund_list = get_fund_list().to_dict(orient="records")
     funds_metrics = []
-
-    for fund in fund_list:
+    for fund in get_fund_list().to_dict(orient="records"):
         fid = fund["fund_id"]
         try:
             nav = get_nav_series(fid, period)
             if nav.empty:
                 continue
-            m = compute_metrics(nav, bench, period)
             funds_metrics.append({
                 "fund_id": fid,
                 "name":    fund["name"],
-                "metrics": m,
+                "metrics": compute_metrics(nav, bench, period),
             })
         except Exception as e:
-            app.logger.warning(f"計算 {fid} 失敗：{e}")
-            continue
+            app.logger.warning(f"{fid} 計算失敗：{e}")
 
     if not funds_metrics:
-        return jsonify({"error": "無法計算任何 ETF 的指標"}), 500
+        return jsonify({"error": "無法計算任何指標"}), 500
 
-    rankings = compute_scores(funds_metrics, weights)
-    return jsonify({"period": period, "rankings": rankings})
+    return jsonify({"period": period, "rankings": compute_scores(funds_metrics, weights)})
 
 
-# ── GET /score/defaults ────────────────────────
 @app.route("/score/defaults", methods=["GET"])
 def score_defaults():
-    """回傳預設權重設定，讓前端初始化 slider 用"""
     return jsonify(DEFAULT_WEIGHTS)
+
+
+# ── POST /optimize ─────────────────────────────
+@app.route("/optimize", methods=["POST"])
+def optimize():
+    """
+    MVO 資產配置最佳化
+
+    body: {
+      "fund_ids": ["0050", "00878", "0056"],
+      "period":   "3Y",
+      "method":   "max_sharpe" | "min_volatility"
+    }
+
+    回傳: {
+      "mvo":      {weights, expected_return, volatility, sharpe},
+      "equal":    {weights, expected_return, volatility, sharpe},
+      "frontier": [{return, volatility, sharpe}, ...],
+    }
+    """
+    body     = request.get_json() or {}
+    fund_ids = body.get("fund_ids", [])
+    period   = body.get("period", "3Y")
+    method   = body.get("method", "max_sharpe")
+
+    if len(fund_ids) < 2:
+        return jsonify({"error": "至少需要 2 檔 ETF"}), 400
+    if len(fund_ids) > 10:
+        return jsonify({"error": "最多 10 檔 ETF"}), 400
+
+    # 抓歷史資料
+    nav_dict = {}
+    for fid in fund_ids:
+        try:
+            nav = get_nav_series(fid, period)
+            if not nav.empty:
+                nav_dict[fid] = nav
+        except Exception as e:
+            app.logger.warning(f"{fid} 資料取得失敗：{e}")
+
+    if len(nav_dict) < 2:
+        return jsonify({"error": "有效資料不足 2 檔"}), 400
+
+    # 取 ETF 名稱
+    fund_names = {}
+    for fid in nav_dict:
+        info = get_fund_info(fid)
+        fund_names[fid] = info["name"] if info else fid
+
+    # 執行最佳化
+    if method == "min_volatility":
+        mvo_result = min_volatility(nav_dict)
+    else:
+        mvo_result = max_sharpe(nav_dict)
+
+    if "error" in mvo_result:
+        return jsonify(mvo_result), 400
+
+    equal_result  = equal_weight_metrics(nav_dict)
+    frontier_data = efficient_frontier(nav_dict, n_points=25)
+
+    return jsonify({
+        "fund_ids":   list(nav_dict.keys()),
+        "fund_names": fund_names,
+        "period":     period,
+        "method":     method,
+        "mvo":        mvo_result,
+        "equal":      equal_result,
+        "frontier":   frontier_data,
+    })
+
+
+# ── POST /backtest ─────────────────────────────
+@app.route("/backtest", methods=["POST"])
+def backtest():
+    """
+    回測 MVO 配置 vs 等權重配置
+
+    body: {
+      "fund_ids":   ["0050", "00878"],
+      "mvo_weights": {"0050": 0.6, "00878": 0.4},
+      "period":     "3Y"
+    }
+    """
+    body        = request.get_json() or {}
+    fund_ids    = body.get("fund_ids", [])
+    mvo_weights = body.get("mvo_weights", {})
+    period      = body.get("period", "3Y")
+
+    if len(fund_ids) < 2:
+        return jsonify({"error": "至少需要 2 檔 ETF"}), 400
+
+    nav_dict = {}
+    for fid in fund_ids:
+        try:
+            nav = get_nav_series(fid, period)
+            if not nav.empty:
+                nav_dict[fid] = nav
+        except Exception as e:
+            app.logger.warning(f"{fid} 資料取得失敗：{e}")
+
+    if len(nav_dict) < 2:
+        return jsonify({"error": "有效資料不足 2 檔"}), 400
+
+    result = run_backtest(nav_dict, mvo_weights)
+    result["period"] = period
+    return jsonify(result)
 
 
 if __name__ == "__main__":

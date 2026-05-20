@@ -5,269 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ETF 評分排名 — FundLens</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
   <style>
-    /* ── 評分頁專用樣式 ── */
-    .score-layout {
-      display: grid;
-      grid-template-columns: 340px 1fr;
-      gap: 20px;
-      align-items: start;
-    }
-
-    @media (max-width: 900px) {
-      .score-layout { grid-template-columns: 1fr; }
-    }
-
-    /* 設定面板 */
-    .config-panel { display: flex; flex-direction: column; gap: 14px; }
-
-    .dim-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      overflow: hidden;
-      transition: border-color 0.15s;
-    }
-
-    .dim-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .dim-header:hover { background: var(--bg-hover); }
-
-    .dim-title {
-      font-family: var(--font-display);
-      font-weight: 700;
-      font-size: 0.9rem;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .dim-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .dim-weight-input {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .dim-weight-num {
-      font-family: var(--font-mono);
-      font-size: 0.85rem;
-      color: var(--gold);
-      min-width: 36px;
-      text-align: right;
-    }
-
-    .dim-body { padding: 16px 18px; }
-
-    /* Slider 列 */
-    .metric-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 12px;
-    }
-
-    .metric-row:last-child { margin-bottom: 0; }
-
-    .metric-row-label {
-      font-size: 0.8rem;
-      color: var(--text-sub);
-      margin-bottom: 4px;
-    }
-
-    .slider-wrap { display: flex; align-items: center; gap: 8px; }
-
-    input[type="range"] {
-      flex: 1;
-      -webkit-appearance: none;
-      height: 4px;
-      border-radius: 2px;
-      background: var(--bg-hover);
-      outline: none;
-      cursor: pointer;
-    }
-
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 14px; height: 14px;
-      border-radius: 50%;
-      background: var(--gold);
-      cursor: pointer;
-      transition: transform 0.1s;
-    }
-
-    input[type="range"]::-webkit-slider-thumb:hover {
-      transform: scale(1.2);
-    }
-
-    .slider-val {
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      color: var(--gold);
-      min-width: 34px;
-      text-align: right;
-    }
-
-    /* 面向權重列 */
-    .dim-weight-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-
-    .dim-weight-row:last-child { margin-bottom: 0; }
-
-    /* 計算按鈕區 */
-    .action-area {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 18px;
-    }
-
-    .weight-sum-hint {
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      margin-bottom: 12px;
-    }
-
-    .weight-sum-hint.warn { color: var(--negative); }
-
-    /* 結果區 */
-    .result-panel {}
-
-    .rank-table-wrap {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      overflow: hidden;
-    }
-
-    .rank-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.875rem;
-    }
-
-    .rank-table th {
-      background: rgba(255,255,255,0.03);
-      color: var(--text-muted);
-      padding: 10px 16px;
-      text-align: left;
-      font-size: 0.72rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      border-bottom: 1px solid var(--border);
-      white-space: nowrap;
-    }
-
-    .rank-table td {
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: middle;
-    }
-
-    .rank-table tr:last-child td { border-bottom: none; }
-    .rank-table tr:hover td { background: var(--bg-hover); }
-
-    /* 排名徽章 */
-    .rank-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 28px; height: 28px;
-      border-radius: 50%;
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      font-weight: 600;
-      background: var(--bg-hover);
-      color: var(--text-sub);
-    }
-
-    .rank-badge.top1 { background: var(--gold);    color: #0D1117; }
-    .rank-badge.top2 { background: #A78BFA;        color: #0D1117; }
-    .rank-badge.top3 { background: var(--positive);color: #0D1117; }
-
-    /* 總分條 */
-    .score-bar-wrap { min-width: 100px; }
-
-    .score-bar-track {
-      height: 6px;
-      background: var(--bg-hover);
-      border-radius: 3px;
-      overflow: hidden;
-      margin-bottom: 4px;
-    }
-
-    .score-bar-fill {
-      height: 100%;
-      border-radius: 3px;
-      background: linear-gradient(90deg, var(--blue), var(--gold));
-      transition: width 0.6s ease;
-    }
-
-    .score-num {
-      font-family: var(--font-mono);
-      font-size: 0.82rem;
-      color: var(--gold);
-    }
-
-    /* 面向分數 pills */
-    .dim-scores {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .dim-pill {
-      font-size: 0.72rem;
-      font-family: var(--font-mono);
-      padding: 2px 8px;
-      border-radius: 99px;
-      border: 1px solid;
-    }
-
-    .dim-pill.ret  { color: #60A5FA; border-color: rgba(96,165,250,0.3);  background: rgba(96,165,250,0.08); }
-    .dim-pill.risk { color: #3DD68C; border-color: rgba(61,214,140,0.3);  background: rgba(61,214,140,0.08); }
-    .dim-pill.stab { color: #E6B84A; border-color: rgba(230,184,74,0.3); background: rgba(230,184,74,0.08); }
-
-    /* 空狀態 / loading */
-    .result-placeholder {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 80px 0;
-      color: var(--text-muted);
-      gap: 12px;
-    }
-
-    .result-placeholder svg {
-      opacity: 0.3;
-    }
+    /* 精靈區 */
+    .wizard-card{background:linear-gradient(135deg,rgba(230,184,74,0.06),rgba(96,165,250,0.04));border:1px solid rgba(230,184,74,0.2);border-radius:var(--radius-md);padding:20px;margin-bottom:16px}
+    .wizard-title{font-family:var(--font-display);font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+    .wizard-title::before{content:"✦";color:var(--gold)}
+    .preset-btns{display:flex;gap:10px;flex-wrap:wrap}
+    .preset-btn{padding:10px 18px;border-radius:var(--radius-md);border:1px solid var(--border-em);background:var(--bg-card);color:var(--text-sub);font-size:.85rem;font-weight:600;font-family:var(--font);cursor:pointer;transition:all .15s;text-align:left}
+    .preset-btn:hover{border-color:var(--gold);color:var(--gold);background:rgba(230,184,74,0.06)}
+    .preset-btn.active{border-color:var(--gold);background:rgba(230,184,74,0.12);color:var(--gold)}
+    .preset-btn .preset-name{display:block;margin-bottom:2px}
+    .preset-btn .preset-desc{font-size:.75rem;font-weight:400;color:var(--text-muted)}
+    /* 評分頁 */
+    .score-layout{display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start}
+    @media(max-width:900px){.score-layout{grid-template-columns:1fr}}
+    .dim-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;transition:border-color .15s;margin-bottom:12px}
+    .dim-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+    .dim-header:hover{background:var(--bg-hover)}
+    .dim-title{font-family:var(--font-display);font-weight:700;font-size:.875rem;display:flex;align-items:center;gap:8px}
+    .dim-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .dim-body{padding:14px 16px}
+    .metric-row-label{font-size:.78rem;color:var(--text-sub);margin-bottom:4px}
+    .slider-wrap{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+    input[type=range]{flex:1;-webkit-appearance:none;height:4px;border-radius:2px;background:var(--bg-hover);outline:none;cursor:pointer}
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--gold);cursor:pointer}
+    .slider-val{font-family:var(--font-mono);font-size:.78rem;color:var(--gold);min-width:32px;text-align:right}
+    .dim-weight-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .weight-sum-hint{font-size:.78rem;color:var(--text-muted);margin-bottom:12px}
+    .weight-sum-hint.warn{color:var(--negative)}
+    /* 排名 */
+    .rank-table-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden}
+    .rank-table{width:100%;border-collapse:collapse;font-size:.875rem}
+    .rank-table th{background:rgba(255,255,255,.03);color:var(--text-muted);padding:10px 16px;text-align:left;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border);white-space:nowrap}
+    .rank-table td{padding:13px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+    .rank-table tr:last-child td{border-bottom:none}
+    .rank-table tr:hover td{background:var(--bg-hover)}
+    .rank-badge{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-family:var(--font-mono);font-size:.78rem;font-weight:600;background:var(--bg-hover);color:var(--text-sub)}
+    .rank-badge.top1{background:var(--gold);color:#0D1117}
+    .rank-badge.top2{background:#A78BFA;color:#0D1117}
+    .rank-badge.top3{background:var(--positive);color:#0D1117}
+    .score-bar-track{height:6px;background:var(--bg-hover);border-radius:3px;overflow:hidden;margin-bottom:3px}
+    .score-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--blue),var(--gold))}
+    .score-num{font-family:var(--font-mono);font-size:.8rem;color:var(--gold)}
+    .dim-scores{display:flex;gap:6px;flex-wrap:wrap}
+    .dim-pill{font-size:.7rem;font-family:var(--font-mono);padding:2px 8px;border-radius:99px;border:1px solid}
+    .dim-pill.ret{color:#60A5FA;border-color:rgba(96,165,250,.3);background:rgba(96,165,250,.08)}
+    .dim-pill.risk{color:#3DD68C;border-color:rgba(61,214,140,.3);background:rgba(61,214,140,.08)}
+    .dim-pill.stab{color:#E6B84A;border-color:rgba(230,184,74,.3);background:rgba(230,184,74,.08)}
+    .result-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 0;color:var(--text-muted);gap:12px}
   </style>
 </head>
 <body>
-
   <header class="site-header">
     <div class="container header-inner">
       <a href="index.html" class="logo">Fund<span>Lens</span></a>
@@ -275,31 +65,52 @@
         <a href="index.html">首頁</a>
         <a href="compare.html">組合比較</a>
         <a href="score.html" class="active">評分排名</a>
+        <a href="allocate.html">資產配置</a>
       </nav>
     </div>
   </header>
 
-  <!-- 頁面標題 -->
   <div class="fund-title-bar">
     <div class="container fund-title-inner">
       <div>
         <h1 class="fund-name">多準則評分排名</h1>
-        <p class="fund-meta" style="margin-top:6px">
-          調整各指標的重要程度，計算所有 ETF 的綜合評分
-        </p>
+        <p class="fund-meta">調整各指標的重要程度，計算所有 ETF 的綜合評分</p>
       </div>
     </div>
   </div>
 
   <main class="container page-main">
+
+    <!-- 決策輔助精靈 -->
+    <div class="wizard-card">
+      <div class="wizard-title">快速設定 — 依投資風格自動調整權重</div>
+      <div class="preset-btns">
+        <button class="preset-btn" data-preset="conservative" onclick="applyPreset('conservative',this)">
+          <span class="preset-name">🛡 穩健保守型</span>
+          <span class="preset-desc">MDD、波動率優先・適合低風險偏好</span>
+        </button>
+        <button class="preset-btn" data-preset="balanced" onclick="applyPreset('balanced',this)">
+          <span class="preset-name">⚖ 平衡成長型</span>
+          <span class="preset-desc">報酬與風險均衡・Sharpe 為主</span>
+        </button>
+        <button class="preset-btn" data-preset="aggressive" onclick="applyPreset('aggressive',this)">
+          <span class="preset-name">🚀 積極成長型</span>
+          <span class="preset-desc">年化報酬、Alpha 優先・適合高風險承受</span>
+        </button>
+        <button class="preset-btn" data-preset="custom" onclick="applyPreset('custom',this)">
+          <span class="preset-name">✏ 自訂</span>
+          <span class="preset-desc">手動調整下方所有滑桿</span>
+        </button>
+      </div>
+    </div>
+
     <div class="score-layout">
 
-      <!-- ── 左側：設定面板 ─────────────────────── -->
-      <div class="config-panel">
-
-        <!-- 計算週期 -->
-        <div class="card" style="padding:18px">
-          <h3 class="card-title" style="margin-bottom:12px">計算週期</h3>
+      <!-- 左側設定 -->
+      <div>
+        <!-- 週期 -->
+        <div class="card" style="padding:16px;margin-bottom:12px">
+          <h3 class="card-title" style="margin-bottom:10px">計算週期</h3>
           <div class="period-tabs" id="scorePeriodTabs" style="margin-bottom:0">
             <button class="period-btn" data-period="1Y">1Y</button>
             <button class="period-btn active" data-period="3Y">3Y</button>
@@ -308,34 +119,27 @@
         </div>
 
         <!-- 面向權重 -->
-        <div class="card" style="padding:18px">
-          <h3 class="card-title" style="margin-bottom:14px">面向權重</h3>
+        <div class="card" style="padding:16px;margin-bottom:12px">
+          <h3 class="card-title" style="margin-bottom:12px">面向權重</h3>
           <div id="dimWeightRows"></div>
-          <div id="dimWeightHint" class="weight-sum-hint">合計：100%</div>
+          <div id="dimHint" class="weight-sum-hint">合計：100%</div>
         </div>
 
-        <!-- 三個面向的指標權重 -->
+        <!-- 指標滑桿卡片 -->
         <div id="dimCards"></div>
 
-        <!-- 計算按鈕 -->
-        <div class="action-area">
-          <button id="calcBtn" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px">
-            計算排名
-          </button>
-        </div>
-
+        <button id="calcBtn" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px">
+          計算排名
+        </button>
       </div>
 
-      <!-- ── 右側：排名結果 ─────────────────────── -->
-      <div class="result-panel">
-        <div id="resultArea">
-          <div class="result-placeholder">
-            <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-            </svg>
-            <p>設定權重後，點擊「計算排名」</p>
-          </div>
+      <!-- 右側結果 -->
+      <div id="resultArea">
+        <div class="result-placeholder">
+          <svg width="44" height="44" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="opacity:.3">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+          <p>設定風格或調整權重後，點「計算排名」</p>
         </div>
       </div>
 
@@ -343,225 +147,193 @@
   </main>
 
   <footer class="site-footer">
-    <div class="container">
-      <p>資料來源：FinMind｜本平台僅供學術研究，不構成投資建議</p>
-    </div>
+    <div class="container"><p>資料來源：FinMind｜本平台僅供學術研究，不構成投資建議</p></div>
   </footer>
 
   <script src="js/api.js"></script>
   <script>
     // ── 面向設定 ─────────────────────────────────
-    const DIM_CONFIG = {
-      return: {
-        label: "報酬面", color: "#60A5FA",
-        metrics: {
-          annualized_return: { label: "年化報酬",  default: 60 },
-          alpha:             { label: "Alpha",     default: 40 },
-        },
+    const DIM_CFG={
+      return:{label:"報酬面",color:"#60A5FA",metrics:{
+        annualized_return:{label:"年化報酬",default:60},
+        alpha:{label:"Alpha",default:40}
+      }},
+      risk:{label:"風險面",color:"#3DD68C",metrics:{
+        mdd:{label:"MDD（最大回檔）",default:40},
+        beta:{label:"Beta",default:30},
+        annualized_std:{label:"年化波動率",default:30}
+      }},
+      stability:{label:"穩定面",color:"#E6B84A",metrics:{
+        sharpe:{label:"Sharpe Ratio",default:40},
+        sortino:{label:"Sortino Ratio",default:35},
+        calmar:{label:"Calmar Ratio",default:25}
+      }},
+    };
+
+    // 預設風格
+    const PRESETS={
+      conservative:{
+        dim:{return:20,risk:50,stability:30},
+        metrics:{
+          return:{annualized_return:40,alpha:60},
+          risk:{mdd:50,beta:30,annualized_std:20},
+          stability:{sharpe:35,sortino:40,calmar:25}
+        }
       },
-      risk: {
-        label: "風險面", color: "#3DD68C",
-        metrics: {
-          mdd:            { label: "MDD（最大回檔）", default: 40 },
-          beta:           { label: "Beta",            default: 30 },
-          annualized_std: { label: "年化波動率",       default: 30 },
-        },
+      balanced:{
+        dim:{return:33,risk:34,stability:33},
+        metrics:{
+          return:{annualized_return:60,alpha:40},
+          risk:{mdd:40,beta:30,annualized_std:30},
+          stability:{sharpe:40,sortino:35,calmar:25}
+        }
       },
-      stability: {
-        label: "穩定面", color: "#E6B84A",
-        metrics: {
-          sharpe:  { label: "Sharpe Ratio",  default: 40 },
-          sortino: { label: "Sortino Ratio", default: 35 },
-          calmar:  { label: "Calmar Ratio",  default: 25 },
-        },
+      aggressive:{
+        dim:{return:55,risk:20,stability:25},
+        metrics:{
+          return:{annualized_return:70,alpha:30},
+          risk:{mdd:35,beta:35,annualized_std:30},
+          stability:{sharpe:40,sortino:35,calmar:25}
+        }
       },
     };
 
-    const DIM_DEFAULTS = { return: 33, risk: 34, stability: 33 };
-
-    // ── State ─────────────────────────────────────
-    let currentPeriod  = "3Y";
-    // dim weights: 0–100
-    const dimWeights   = { ...DIM_DEFAULTS };
-    // metric weights: { dimKey: { metricKey: 0-100 } }
-    const metricWeights = {};
-    Object.keys(DIM_CONFIG).forEach(dk => {
-      metricWeights[dk] = {};
-      Object.keys(DIM_CONFIG[dk].metrics).forEach(mk => {
-        metricWeights[dk][mk] = DIM_CONFIG[dk].metrics[mk].default;
-      });
+    const dimW={return:33,risk:34,stability:33};
+    const metW={};
+    Object.keys(DIM_CFG).forEach(dk=>{
+      metW[dk]={};
+      Object.keys(DIM_CFG[dk].metrics).forEach(mk=>metW[dk][mk]=DIM_CFG[dk].metrics[mk].default);
     });
 
-    // ── 渲染面向權重列 ────────────────────────────
-    function renderDimWeightRows() {
-      const container = document.getElementById("dimWeightRows");
-      container.innerHTML = Object.keys(DIM_CONFIG).map(dk => {
-        const cfg = DIM_CONFIG[dk];
-        return `
-          <div class="dim-weight-row">
-            <span style="display:inline-flex;align-items:center;gap:6px;min-width:72px">
-              <span style="width:8px;height:8px;border-radius:50%;background:${cfg.color};flex-shrink:0"></span>
-              <span style="font-size:0.82rem;color:var(--text-sub)">${cfg.label}</span>
-            </span>
-            <input type="range" min="0" max="100" step="1"
-              value="${dimWeights[dk]}"
-              data-dim="${dk}"
-              id="dimSlider_${dk}"
-              style="flex:1"
-              oninput="onDimSlider(this)"
-            />
-            <span class="slider-val" id="dimVal_${dk}">${dimWeights[dk]}%</span>
-          </div>`;
-      }).join("");
+    let currentPeriod="3Y";
+
+    // ── 精靈 ─────────────────────────────────────
+    function applyPreset(preset,el){
+      document.querySelectorAll(".preset-btn").forEach(b=>b.classList.remove("active"));
+      el.classList.add("active");
+      if(preset==="custom")return;
+      const p=PRESETS[preset];
+      Object.assign(dimW,p.dim);
+      Object.keys(p.metrics).forEach(dk=>Object.assign(metW[dk],p.metrics[dk]));
+      renderDimWeightRows();
+      renderDimCards();
+      updateHint();
     }
 
-    function onDimSlider(el) {
-      const dk = el.dataset.dim;
-      dimWeights[dk] = parseInt(el.value);
-      document.getElementById(`dimVal_${dk}`).textContent = dimWeights[dk] + "%";
-      updateDimWeightHint();
+    // ── 渲染 ─────────────────────────────────────
+    function renderDimWeightRows(){
+      document.getElementById("dimWeightRows").innerHTML=Object.keys(DIM_CFG).map(dk=>`
+        <div class="dim-weight-row">
+          <span style="display:inline-flex;align-items:center;gap:6px;min-width:60px">
+            <span style="width:7px;height:7px;border-radius:50%;background:${DIM_CFG[dk].color};flex-shrink:0"></span>
+            <span style="font-size:.8rem;color:var(--text-sub)">${DIM_CFG[dk].label}</span>
+          </span>
+          <input type="range" min="0" max="100" step="1" value="${dimW[dk]}"
+            data-dim="${dk}" id="dSlider_${dk}" style="flex:1" oninput="onDimSlider(this)"/>
+          <span class="slider-val" id="dVal_${dk}">${dimW[dk]}%</span>
+        </div>`).join("");
     }
 
-    function updateDimWeightHint() {
-      const total = Object.values(dimWeights).reduce((a, b) => a + b, 0);
-      const hint  = document.getElementById("dimWeightHint");
-      hint.textContent = `合計：${total}%${total !== 100 ? "（建議調整為 100%）" : ""}`;
-      hint.className   = "weight-sum-hint" + (total !== 100 ? " warn" : "");
+    function onDimSlider(el){
+      dimW[el.dataset.dim]=parseInt(el.value);
+      document.getElementById(`dVal_${el.dataset.dim}`).textContent=dimW[el.dataset.dim]+"%";
+      updateHint();
     }
 
-    // ── 渲染指標 Slider 卡片 ──────────────────────
-    function renderDimCards() {
-      const container = document.getElementById("dimCards");
-      container.innerHTML = Object.keys(DIM_CONFIG).map(dk => {
-        const cfg = DIM_CONFIG[dk];
-        const metricRows = Object.keys(cfg.metrics).map(mk => {
-          const mCfg = cfg.metrics[mk];
-          return `
-            <div class="metric-row">
-              <div>
-                <div class="metric-row-label">${mCfg.label}</div>
-                <div class="slider-wrap">
-                  <input type="range" min="0" max="100" step="5"
-                    value="${metricWeights[dk][mk]}"
-                    data-dim="${dk}" data-metric="${mk}"
-                    oninput="onMetricSlider(this)"
-                  />
-                  <span class="slider-val" id="mVal_${dk}_${mk}">${metricWeights[dk][mk]}%</span>
-                </div>
-              </div>
-            </div>`;
-        }).join("");
+    function updateHint(){
+      const total=Object.values(dimW).reduce((a,b)=>a+b,0);
+      const h=document.getElementById("dimHint");
+      h.textContent=`合計：${total}%${total!==100?" （建議調整為 100%）":""}`;
+      h.className="weight-sum-hint"+(total!==100?" warn":"");
+    }
 
+    function renderDimCards(){
+      document.getElementById("dimCards").innerHTML=Object.keys(DIM_CFG).map(dk=>{
+        const cfg=DIM_CFG[dk];
+        const rows=Object.keys(cfg.metrics).map(mk=>`
+          <div class="metric-row-label">${cfg.metrics[mk].label}</div>
+          <div class="slider-wrap">
+            <input type="range" min="0" max="100" step="5" value="${metW[dk][mk]}"
+              data-dim="${dk}" data-metric="${mk}" oninput="onMetSlider(this)"/>
+            <span class="slider-val" id="mVal_${dk}_${mk}">${metW[dk][mk]}%</span>
+          </div>`).join("");
         return `
           <div class="dim-card">
-            <div class="dim-header" onclick="toggleDimCard('${dk}')">
+            <div class="dim-header" onclick="toggleDim('${dk}')">
               <span class="dim-title">
                 <span class="dim-dot" style="background:${cfg.color}"></span>
                 ${cfg.label} 指標權重
               </span>
-              <span id="dimToggle_${dk}" style="color:var(--text-muted);font-size:0.85rem">▾</span>
+              <span id="toggle_${dk}" style="color:var(--text-muted);font-size:.85rem">▾</span>
             </div>
-            <div class="dim-body" id="dimBody_${dk}">
-              ${metricRows}
-            </div>
+            <div class="dim-body" id="dBody_${dk}">${rows}</div>
           </div>`;
       }).join("");
     }
 
-    function toggleDimCard(dk) {
-      const body   = document.getElementById(`dimBody_${dk}`);
-      const toggle = document.getElementById(`dimToggle_${dk}`);
-      const hidden = body.style.display === "none";
-      body.style.display   = hidden ? "" : "none";
-      toggle.textContent   = hidden ? "▾" : "▸";
+    function toggleDim(dk){
+      const body=document.getElementById(`dBody_${dk}`);
+      const toggle=document.getElementById(`toggle_${dk}`);
+      const hidden=body.style.display==="none";
+      body.style.display=hidden?"":"none";
+      toggle.textContent=hidden?"▾":"▸";
     }
 
-    function onMetricSlider(el) {
-      const { dim: dk, metric: mk } = el.dataset;
-      metricWeights[dk][mk] = parseInt(el.value);
-      document.getElementById(`mVal_${dk}_${mk}`).textContent = metricWeights[dk][mk] + "%";
+    function onMetSlider(el){
+      metW[el.dataset.dim][el.dataset.metric]=parseInt(el.value);
+      document.getElementById(`mVal_${el.dataset.dim}_${el.dataset.metric}`).textContent=metW[el.dataset.dim][el.dataset.metric]+"%";
     }
 
-    // ── 組合 weights payload ──────────────────────
-    function buildWeightsPayload() {
-      const total = Object.values(dimWeights).reduce((a, b) => a + b, 0) || 100;
-      const payload = {};
-      Object.keys(DIM_CONFIG).forEach(dk => {
-        const mTotal = Object.values(metricWeights[dk]).reduce((a, b) => a + b, 0) || 100;
-        const metrics = {};
-        Object.keys(metricWeights[dk]).forEach(mk => {
-          metrics[mk] = metricWeights[dk][mk] / mTotal;
-        });
-        payload[dk] = {
-          dimension_weight: dimWeights[dk] / total,
-          metrics,
-        };
+    function buildPayload(){
+      const total=Object.values(dimW).reduce((a,b)=>a+b,0)||100;
+      const payload={};
+      Object.keys(DIM_CFG).forEach(dk=>{
+        const mt=Object.values(metW[dk]).reduce((a,b)=>a+b,0)||100;
+        const metrics={};
+        Object.keys(metW[dk]).forEach(mk=>metrics[mk]=metW[dk][mk]/mt);
+        payload[dk]={dimension_weight:dimW[dk]/total,metrics};
       });
       return payload;
     }
 
-    // ── 計算排名 ──────────────────────────────────
-    async function calcScore() {
-      const btn = document.getElementById("calcBtn");
-      btn.disabled    = true;
-      btn.textContent = "計算中...";
-
-      document.getElementById("resultArea").innerHTML = `
+    // ── 計算排名 ─────────────────────────────────
+    async function calcScore(){
+      const btn=document.getElementById("calcBtn");
+      btn.disabled=true;btn.textContent="計算中...";
+      document.getElementById("resultArea").innerHTML=`
         <div class="result-placeholder">
-          <p style="color:var(--text-sub)">正在抓取所有 ETF 資料並計算指標，需要約 30–60 秒...</p>
-          <p style="font-size:0.78rem">（FinMind 每次需打多支 API）</p>
+          <p style="color:var(--text-sub)">正在計算所有 ETF 的指標（約 30–60 秒）...</p>
         </div>`;
-
-      try {
-        const res = await fetch("http://localhost:5000/score", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            period:  currentPeriod,
-            weights: buildWeightsPayload(),
-          }),
+      try{
+        const res=await fetch("http://localhost:5000/score",{
+          method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({period:currentPeriod,weights:buildPayload()})
         });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || `HTTP ${res.status}`);
-        }
-
-        const data = await res.json();
-        renderResults(data.rankings, data.period);
-      } catch (e) {
-        document.getElementById("resultArea").innerHTML =
-          `<div class="result-placeholder"><p class="error-msg">⚠️ ${e.message}</p></div>`;
-      } finally {
-        btn.disabled    = false;
-        btn.textContent = "計算排名";
-      }
+        const data=await res.json();
+        if(data.error)throw new Error(data.error);
+        renderResults(data.rankings,data.period);
+      }catch(e){
+        document.getElementById("resultArea").innerHTML=`<div class="result-placeholder"><p class="error-msg">⚠️ ${e.message}</p></div>`;
+      }finally{btn.disabled=false;btn.textContent="計算排名";}
     }
 
-    // ── 渲染排名表 ────────────────────────────────
-    function renderResults(rankings, period) {
-      if (!rankings?.length) {
-        document.getElementById("resultArea").innerHTML =
-          `<div class="result-placeholder"><p>無排名資料</p></div>`;
+    function renderResults(rankings,period){
+      if(!rankings?.length){
+        document.getElementById("resultArea").innerHTML=`<div class="result-placeholder"><p>無資料</p></div>`;
         return;
       }
-
-      const rows = rankings.map(r => {
-        const rankCls = r.rank === 1 ? "top1" : r.rank === 2 ? "top2" : r.rank === 3 ? "top3" : "";
+      const rows=rankings.map(r=>{
+        const cls=r.rank===1?"top1":r.rank===2?"top2":r.rank===3?"top3":"";
         return `
           <tr>
-            <td><span class="rank-badge ${rankCls}">${r.rank}</span></td>
+            <td><span class="rank-badge ${cls}">${r.rank}</span></td>
             <td>
               <strong style="color:var(--text)">${r.name}</strong>
-              <span style="color:var(--text-muted);font-size:0.75rem;margin-left:6px">${r.fund_id}</span>
+              <span style="color:var(--text-muted);font-size:.75rem;margin-left:6px">${r.fund_id}</span>
             </td>
             <td>
-              <div class="score-bar-wrap">
-                <div class="score-bar-track">
-                  <div class="score-bar-fill" style="width:${r.total_score}%"></div>
-                </div>
-                <span class="score-num">${r.total_score}</span>
-              </div>
+              <div class="score-bar-track"><div class="score-bar-fill" style="width:${r.total_score}%"></div></div>
+              <span class="score-num">${r.total_score}</span>
             </td>
             <td>
               <div class="dim-scores">
@@ -570,48 +342,34 @@
                 <span class="dim-pill stab">穩定 ${r.stability_score}</span>
               </div>
             </td>
-            <td>
-              <a href="fund.html?id=${r.fund_id}" class="btn-link">分析 →</a>
-            </td>
+            <td><a href="fund.html?id=${r.fund_id}" class="btn-link">分析 →</a></td>
           </tr>`;
       }).join("");
-
-      document.getElementById("resultArea").innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      document.getElementById("resultArea").innerHTML=`
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
           <h2 class="section-title" style="margin-bottom:0">排名結果（${period}）</h2>
-          <span style="font-size:0.78rem;color:var(--text-muted)">${rankings.length} 檔 ETF</span>
+          <span style="font-size:.78rem;color:var(--text-muted)">${rankings.length} 檔 ETF</span>
         </div>
         <div class="rank-table-wrap">
           <table class="rank-table">
-            <thead>
-              <tr>
-                <th>排名</th>
-                <th>ETF</th>
-                <th>總分 / 100</th>
-                <th>面向分數</th>
-                <th></th>
-              </tr>
-            </thead>
+            <thead><tr><th>排名</th><th>ETF</th><th>總分/100</th><th>面向分數</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>`;
     }
 
-    // ── 事件綁定 ──────────────────────────────────
-    document.getElementById("scorePeriodTabs").addEventListener("click", e => {
-      const btn = e.target.closest(".period-btn");
-      if (!btn) return;
-      document.querySelectorAll("#scorePeriodTabs .period-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      currentPeriod = btn.dataset.period;
+    // ── 事件 ─────────────────────────────────────
+    document.getElementById("scorePeriodTabs").addEventListener("click",e=>{
+      const btn=e.target.closest(".period-btn");if(!btn)return;
+      document.querySelectorAll("#scorePeriodTabs .period-btn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");currentPeriod=btn.dataset.period;
     });
-
-    document.getElementById("calcBtn").addEventListener("click", calcScore);
+    document.getElementById("calcBtn").addEventListener("click",calcScore);
 
     // ── 初始化 ────────────────────────────────────
     renderDimWeightRows();
     renderDimCards();
-    updateDimWeightHint();
+    updateHint();
   </script>
 </body>
 </html>
