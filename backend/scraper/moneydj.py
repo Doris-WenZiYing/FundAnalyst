@@ -71,13 +71,11 @@ def _parse_fund_code(href: str) -> Optional[str]:
     return None
 
 
-# ── Step 1：取得所有分類代號 ─────────────────────
-def _get_category_codes(use_cache: bool = True) -> list[str]:
+# ── Step 1：取得所有分類代號與名稱 ──────────────
+def _get_category_codes(use_cache: bool = True) -> list:
     """
-    從 YP301000（主分類頁）抓所有分類代號
-    分類連結格式：/funddj/yb/YP302000.djhtm?a=ET000001
-
-    實測：頁面上有 InternalSearch-TB1 表格，連結含 YP302000.djhtm?a=
+    從 YP301000（主分類頁）抓所有分類代號與對應中文名稱
+    回傳：[{"code": "ET000001", "name": "指數型"}, ...]
     """
     CACHE_KEY = "moneydj_categories"
     if use_cache:
@@ -89,20 +87,21 @@ def _get_category_codes(use_cache: bool = True) -> list[str]:
     if not soup:
         return []
 
-    codes = []
-    seen  = set()
+    categories = []
+    seen = set()
     for a in soup.find_all("a", href=True):
         href = a["href"]
         if "YP302000" in href and "?a=" in href:
             code = href.split("?a=")[-1].strip()
-            if code and code not in seen:
+            name = a.get_text(strip=True)
+            if code and code not in seen and name:
                 seen.add(code)
-                codes.append(code)
+                categories.append({"code": code, "name": name})
 
-    logger.info(f"找到 {len(codes)} 個分類代號")
-    if codes:
-        cache.set(CACHE_KEY, codes)
-    return codes
+    logger.info(f"找到 {len(categories)} 個分類")
+    if categories:
+        cache.set(CACHE_KEY, categories)
+    return categories
 
 
 # ── Step 2：從分類頁抓基金清單 ───────────────────
@@ -119,7 +118,7 @@ def _clean_fund_name(name: str) -> str:
     return name.strip()
 
 
-def _scrape_category(cat_code: str) -> list[dict]:
+def _scrape_category(cat_code: str, cat_name: str = "") -> list[dict]:
     """
     從 YP302000?a=ETxxxxxx 抓該分類的所有基金。
 
@@ -164,7 +163,7 @@ def _scrape_category(cat_code: str) -> list[dict]:
                     "fund_code": fund_code,
                     "name":      name,
                     "company":   company,
-                    "type":      "",
+                    "type":      cat_name,
                 })
 
         i += 1
@@ -199,9 +198,11 @@ def scrape_fund_list(use_cache: bool = True) -> list[dict]:
     all_funds = []
     seen      = set()
 
-    for i, code in enumerate(cat_codes, 1):
-        logger.info(f"[{i}/{len(cat_codes)}] 爬取分類 {code}")
-        funds = _scrape_category(code)
+    for i, cat in enumerate(cat_codes, 1):
+        code = cat["code"]
+        name = cat["name"]
+        logger.info(f"[{i}/{len(cat_codes)}] 爬取分類 {code} ({name})")
+        funds = _scrape_category(code, name)
         for f in funds:
             if f["fund_code"] not in seen:
                 seen.add(f["fund_code"])

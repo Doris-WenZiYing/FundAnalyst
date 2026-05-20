@@ -1,10 +1,11 @@
 """
 data_source.py — 資料來源層
 
-資料流程：
-  MoneyDJ 爬蟲 → 基金清單（名稱、公司）
-  fund_mapper  → MoneyDJ代號 轉換為 FinMind股票代號
-  FinMind API  → 歷史收盤價（分頁自動拼接）
+資料來源整合：
+  MoneyDJ 爬蟲  → 基金清單（名稱、公司）
+  fund_mapper   → MoneyDJ代號 ↔ FinMind股票代號
+  scraper.sitca → RR 評級（規則式，依投信投顧公會分類標準）
+  FinMind API   → 歷史收盤價（分頁自動拼接 + 前向補值）
 """
 
 import os
@@ -23,7 +24,7 @@ PERIOD_DAYS   = {"1Y": 365, "3Y": 1095, "5Y": 1825}
 
 _moneydj_fund_list = None
 
-# ── 內建 ETF 備用清單 ────────────────────────────
+# ── 備用 ETF 清單 ────────────────────────────────
 _ETF_FALLBACK = [
     {"fund_id": "0050",   "name": "元大台灣50",       "company": "元大投信", "type": "股票型"},
     {"fund_id": "0056",   "name": "元大高股息",       "company": "元大投信", "type": "股票型"},
@@ -40,7 +41,7 @@ _ETF_FALLBACK = [
 ]
 
 
-# ── MoneyDJ 基金清單（懶載入）────────────────────
+# ── MoneyDJ 清單（懶載入）────────────────────────
 def _get_moneydj_list() -> list:
     global _moneydj_fund_list
     if _moneydj_fund_list is not None:
@@ -55,33 +56,21 @@ def _get_moneydj_list() -> list:
     return _moneydj_fund_list
 
 
-# ── fund_id 轉 FinMind 股票代號 ──────────────────
+# ── fund_id 轉 FinMind 代號 ──────────────────────
 def _to_stock_id(fund_id: str) -> str:
-    """
-    將 fund_id 轉換成 FinMind 可用的股票代號。
-
-    邏輯：
-      1. 若 fund_id 本身像股票代號（純數字或已知格式）→ 直接用
-      2. 否則查 fund_mapping.json（MoneyDJ代號 → 股票代號）
-      3. 查不到 → 回傳原始 fund_id，讓 FinMind 自己報錯
-    """
-    # 已是 FinMind 格式（純數字或含B的債券ETF代號）
     if fund_id.replace("B", "").isdigit():
         return fund_id
-
-    # 查對照表
     try:
         from fund_mapper import get_stock_id
         sid = get_stock_id(fund_id)
         if sid:
             return sid
-    except Exception as e:
-        logger.debug(f"fund_mapper 查詢失敗：{e}")
+    except Exception:
+        pass
+    return fund_id
 
-    return fund_id  # fallback
 
-
-# ── FinMind 重試請求 ─────────────────────────────
+# ── FinMind 重試 ─────────────────────────────────
 def _fetch_with_retry(params: dict, max_retries: int = 3, backoff: float = 2.0) -> dict:
     last_error = None
     for attempt in range(max_retries + 1):
@@ -108,7 +97,7 @@ def _fetch_with_retry(params: dict, max_retries: int = 3, backoff: float = 2.0) 
     raise RuntimeError(f"FinMind 失敗（重試 {max_retries} 次）：{last_error}")
 
 
-# ── 分頁自動拼接（解決 >1000 筆上限）───────────
+# ── 分頁自動拼接（>1000 筆）──────────────────────
 def _fetch_paginated(stock_id: str, start_date: str, end_date: str = None) -> pd.DataFrame:
     if not end_date:
         end_date = datetime.today().strftime("%Y-%m-%d")
@@ -161,44 +150,54 @@ def _start_date(period: str) -> str:
 # ── 公開介面 ─────────────────────────────────────
 def get_fund_list() -> pd.DataFrame:
     """
-    回傳基金清單（fund_id 為 FinMind 可用的股票代號）。
-
-    優先使用 MoneyDJ 清單，並透過 fund_mapper 轉換代號。
-    若 MoneyDJ 失敗或該基金沒有對應代號，使用備用 ETF 清單。
+    回傳基金清單（fund_id 為 FinMind 股票代號）。
+    若 MoneyDJ + fund_mapper 有資料，優先使用；否則用備用 ETF 清單。
+    自動附加 RR 評級（依投信投顧公會規則分類）。
     """
+    from scraper.sitca import classify_rr
+
     moneydj = _get_moneydj_list()
 
     if moneydj:
         try:
             from fund_mapper import load_mapping
-            mapping = load_mapping()  # {fund_code: stock_id}
+            mapping = load_mapping()
         except Exception:
             mapping = {}
 
         rows = []
         for f in moneydj:
             fc       = f.get("fund_code", "")
-            stock_id = mapping.get(fc)  # 只保留有對應到股票代號的基金
-            if stock_id:
-                rows.append({
-                    "fund_id": stock_id,    # FinMind 用的代號
-                    "fund_code": fc,        # MoneyDJ 代號（備用）
-                    "name":    f.get("name", ""),
-                    "company": f.get("company", ""),
-                    "type":    f.get("type", ""),
-                })
+            stock_id = mapping.get(fc)
+            if not stock_id:
+                continue
+            name = f.get("name", "")
+            rows.append({
+                "fund_id":   stock_id,
+                "fund_code": fc,
+                "name":      name,
+                "company":   f.get("company", ""),
+                "type":      f.get("type", "ETF"),
+                "rr_rating": classify_rr(stock_id, name),
+            })
 
         if rows:
-            df = pd.DataFrame(rows).drop_duplicates("fund_id")
-            logger.info(f"基金清單：MoneyDJ {len(rows)} 筆（已對應股票代號）")
-            return df
+            return pd.DataFrame(rows).drop_duplicates("fund_id")
 
-    logger.warning("使用內建 ETF 備用清單")
-    return pd.DataFrame(_ETF_FALLBACK)
+    # 備用清單也加 RR
+    fallback = []
+    for f in _ETF_FALLBACK:
+        fallback.append({
+            **f,
+            "rr_rating": classify_rr(f["fund_id"], f["name"]),
+        })
+    return pd.DataFrame(fallback)
 
 
 def get_fund_info(fund_id: str):
-    """取得單一基金資訊，補充 MoneyDJ 詳細資料"""
+    """取得單一基金資訊，含 RR 評級"""
+    from scraper.sitca import classify_rr, rr_label
+
     funds = get_fund_list()
     row   = funds[funds["fund_id"] == fund_id]
     if row.empty:
@@ -206,22 +205,17 @@ def get_fund_info(fund_id: str):
 
     info = row.iloc[0].to_dict()
 
-    # 用 MoneyDJ 代號補充詳細資訊
-    fund_code = info.get("fund_code", fund_id)
-    try:
-        from scraper.moneydj import scrape_fund_detail
-        detail = scrape_fund_detail(fund_code, use_cache=True)
-        info.update({
-            "rr_rating":     detail.get("rr_rating"),
-            "manager":       detail.get("manager"),
-            "region":        detail.get("region"),
-            "expense_ratio": detail.get("expense_ratio"),
-            "aum":           detail.get("aum"),
-        })
-    except Exception as e:
-        logger.warning(f"MoneyDJ detail 失敗：{e}")
-        for k in ["rr_rating", "manager", "region", "expense_ratio", "aum"]:
-            info.setdefault(k, None)
+    # 確保 rr_rating 存在
+    rr = info.get("rr_rating") or classify_rr(fund_id, info.get("name", ""))
+    info["rr_rating"]    = rr
+    info["rr_label"]     = rr_label(rr)
+
+    # 基金規模（從 FinMind TaiwanStockMarketValue）
+    info["aum"] = _get_etf_aum(fund_id)
+
+    # MoneyDJ 詳細資訊（不再需要 aum/expense_ratio，已移除）
+    for k in ["region", "manager"]:
+        info.setdefault(k, None)
 
     # 最新收盤價
     try:
@@ -235,7 +229,7 @@ def get_fund_info(fund_id: str):
 
 
 def get_nav_series(fund_id: str, period: str) -> pd.Series:
-    """取得歷史收盤價（自動分頁 + 補值）"""
+    """取得歷史收盤價 Series（自動分頁 + 補值）"""
     stock_id = _to_stock_id(fund_id)
     df = _fetch_paginated(stock_id, _start_date(period))
     if df.empty or "close" not in df.columns:
@@ -249,3 +243,31 @@ def get_benchmark_series(period: str) -> pd.Series:
     if df.empty or "close" not in df.columns:
         return pd.Series(dtype=float)
     return _fill_series(df.set_index("date")["close"].astype(float))
+
+
+# ── ETF 基金規模（市值）────────────────────────
+def _get_etf_aum(stock_id: str):
+    """
+    從 FinMind TaiwanStockMarketValue 取得 ETF 市值（約等於 AUM）
+    回傳單位：億元（四捨五入至小數點第一位）
+    """
+    try:
+        # 只需抓最近 30 天即可拿到最新市值
+        start = (datetime.today() - timedelta(days=30)).strftime("%Y-%m-%d")
+        params = {
+            "dataset":    "TaiwanStockMarketValue",
+            "data_id":    stock_id,
+            "start_date": start,
+            "token":      FINMIND_TOKEN,
+        }
+        body = _fetch_with_retry(params)
+        data = body.get("data", []) if isinstance(body, dict) else []
+        if not data:
+            return None
+        # 取最新一筆，欄位為 market_value（單位：千元）
+        latest = sorted(data, key=lambda x: x.get("date", ""))[-1]
+        market_value_k = float(latest.get("market_value", 0))  # 千元
+        return round(market_value_k / 100_000, 1)              # 千元 → 億元
+    except Exception as e:
+        logger.debug(f"取得 {stock_id} AUM 失敗：{e}")
+        return None
