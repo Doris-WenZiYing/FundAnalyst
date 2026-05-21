@@ -164,6 +164,94 @@ python3 -c "from scraper.moneydj import scrape_fund_list; scrape_fund_list(use_c
 
 ---
 
+## 資料驗證
+
+確認系統計算結果正確，在 `backend/` 目錄下執行以下指令，再與 MoneyDJ 網站對照。
+
+### 1. NAV 正確性
+
+```bash
+python3 -c "
+from data_source import get_nav_series
+nav = get_nav_series('0050', '1Y')
+print('最新日期:', nav.index[-1].date())
+print('最新收盤:', nav.iloc[-1])
+print('30天前  :', nav.iloc[-30])
+"
+```
+
+對照網址：`https://www.moneydj.com/funddj/ya/yp010000.djhtm?a=ACYT59`
+（MoneyDJ 個別 ETF 頁面的近30日淨值表格）
+
+---
+
+### 2. 指標正確性
+
+```bash
+python3 -c "
+import sys; sys.path.insert(0, '.')
+from data_source import get_nav_series, get_benchmark_series
+from calculators.returns import daily_returns, annualized_return
+from calculators.risk import max_drawdown, annualized_std
+from calculators.ratios import sharpe_ratio
+
+nav    = get_nav_series('0050', '3Y')
+bench  = get_benchmark_series('3Y')
+ret    = daily_returns(nav)
+ann    = annualized_return(nav)
+std    = annualized_std(ret)
+mdd    = max_drawdown(nav)
+sharpe = sharpe_ratio(ann, 0.015, std)
+
+print(f'年化報酬：{ann*100:.2f}%')
+print(f'年化波動：{std*100:.2f}%')
+print(f'最大回檔：{mdd*100:.2f}%')
+print(f'Sharpe  ：{sharpe:.2f}')
+"
+```
+
+對照方式：MoneyDJ 的「績效評比」頁，或 GoodInfo 等財經網站的歷史績效數字。
+誤差在 1–2% 內屬正常（差異來自計算基準日不同）。
+
+---
+
+### 3. RR 評級正確性
+
+```bash
+python3 -c "
+from scraper.sitca import classify_rr, rr_label
+tests = [
+    ('0050',   '元大台灣50'),
+    ('00679B', '元大美債20年'),
+    ('00892',  '富邦台灣核心半導體ETF基金'),
+    ('00878',  '國泰永續高股息'),
+]
+for fid, name in tests:
+    print(f'{fid:<8} -> {rr_label(classify_rr(fid, name))}')
+"
+```
+
+預期結果：
+
+| ETF | 預期 RR |
+|-----|---------|
+| 0050 | RR4（中高） |
+| 00679B | RR2（低） |
+| 00892 | RR5（高） |
+| 00878 | RR4（中高） |
+
+---
+
+### 4. 最快驗證（打 API）
+
+```bash
+curl "http://localhost:5000/funds/0050/metrics?period=1Y"
+```
+
+把回傳的 `annualized_return` 乘以 100 換算成 %，與 MoneyDJ 的「1年報酬率」比對即可。
+
+---
+
 ## 常見問題
 
 **`ModuleNotFoundError: No module named 'flask'`**
