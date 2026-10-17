@@ -134,12 +134,19 @@ def _fetch_paginated(stock_id: str, start_date: str, end_date: str = None) -> pd
     return df.drop_duplicates("date").sort_values("date").reset_index(drop=True)
 
 
-# ── 時序補值 ─────────────────────────────────────
+# ── 時序整理 ─────────────────────────────────────
 def _fill_series(series: pd.Series) -> pd.Series:
+    """
+    只保留實際交易日（排序、去重、去空值）。
+
+    舊版會用 freq="D" 把週末與假日補成前一日價格，一年變成約 365 筆，
+    但年化計算（returns / risk / mvo）都假設一年 252 個交易日，
+    導致年化報酬率偏低、波動率偏低約 17%，連帶 Sharpe、Sortino、Alpha、MVO 都偏掉。
+    """
     if series.empty:
         return series
-    idx = pd.date_range(series.index.min(), series.index.max(), freq="D")
-    return series.reindex(idx).ffill().dropna()
+    series = series[~series.index.duplicated(keep="last")].sort_index()
+    return series.dropna()
 
 
 def _start_date(period: str) -> str:
@@ -229,20 +236,21 @@ def get_fund_info(fund_id: str):
 
 
 def get_nav_series(fund_id: str, period: str) -> pd.Series:
-    """取得歷史收盤價 Series（自動分頁 + 補值）"""
+    """
+    取得歷史價格 Series（只含交易日）。
+    優先用還原股價（含配息），與股票網站的「含息報酬」口徑一致；
+    取不到時才退回未還原收盤價。來源順序見 stock_data.PRICE_SOURCES。
+    """
+    from stock_data import get_price_series      # 延遲 import，避免循環引用
     stock_id = _to_stock_id(fund_id)
-    df = _fetch_paginated(stock_id, _start_date(period))
-    if df.empty or "close" not in df.columns:
-        return pd.Series(dtype=float)
-    return _fill_series(df.set_index("date")["close"].astype(float))
+    end      = datetime.today().strftime("%Y-%m-%d")
+    series, _ = get_price_series(stock_id, _start_date(period), end)
+    return _fill_series(series)
 
 
 def get_benchmark_series(period: str) -> pd.Series:
-    """取得 0050 基準指數（自動分頁 + 補值）"""
-    df = _fetch_paginated(BENCHMARK_ID, _start_date(period))
-    if df.empty or "close" not in df.columns:
-        return pd.Series(dtype=float)
-    return _fill_series(df.set_index("date")["close"].astype(float))
+    """取得 0050 基準（還原股價優先，只含交易日）"""
+    return get_nav_series(BENCHMARK_ID, period)
 
 
 # ── ETF 基金規模（市值）────────────────────────

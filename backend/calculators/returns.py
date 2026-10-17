@@ -15,12 +15,13 @@ def annualized_return(nav_series: pd.Series, periods_per_year: int = 252) -> flo
     """
     年化報酬率
     公式：(末值 / 初值) ^ (periods_per_year / n) - 1
+    n 為報酬期數（價格筆數 - 1），nav_series 必須只含交易日
     """
     if nav_series is None or len(nav_series) < 2:
         return None
     start = nav_series.iloc[0]
     end   = nav_series.iloc[-1]
-    n     = len(nav_series)
+    n     = len(nav_series) - 1
     if start <= 0:
         return None
     return float((end / start) ** (periods_per_year / n) - 1)

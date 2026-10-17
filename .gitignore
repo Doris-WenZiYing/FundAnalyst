@@ -36,3 +36,8 @@ backend/data/*.json
 
 # ── Log ─────────────────────────────────────────
 *.log
+# API 快取（股價、財報），可隨時重新抓
+backend/scraper/cache/price_*.json
+backend/scraper/cache/fin_*.json
+__pycache__/
+.pytest_cache/

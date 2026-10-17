@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ETF 成分股篩選 — FundLens</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;align-items:end}
+    .ctl label{display:block;font-size:.72rem;font-weight:600;color:var(--text-muted);letter-spacing:.6px;margin-bottom:6px}
+    .ctl input,.ctl select{width:100%;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-em);background:var(--bg-input);color:var(--text);font-family:var(--font);font-size:.875rem;outline:none;color-scheme:dark}
+    .ctl input:focus,.ctl select:focus{border-color:var(--gold)}
+    .topn-tabs{display:flex;gap:6px}
+    .topn-tabs .period-btn{flex:1}
+    .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:20px 0 16px}
+    .summary-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:18px 20px}
+    .summary-card .metric-value{font-size:1.6rem;margin:8px 0 4px}
+    .summary-card .sub{font-size:.78rem;color:var(--text-muted)}
+    .notice{font-size:.8rem;color:var(--text-sub);background:rgba(230,184,74,.06);border:1px solid rgba(230,184,74,.2);border-radius:var(--radius-sm);padding:10px 14px;margin-top:14px;line-height:1.6}
+    .notice.warn{background:rgba(255,107,107,.06);border-color:rgba(255,107,107,.25)}
+    tr.selected td{background:rgba(230,184,74,.06)}
+    tr.excluded td{opacity:.5}
+    tr.excluded td.reason{opacity:.85}
+    .reason{font-size:.75rem;color:var(--negative);white-space:normal;min-width:150px}
+    .pass{font-size:.75rem;color:var(--positive);white-space:nowrap}
+    .w-sub{display:block;font-size:.7rem;color:var(--text-muted);font-family:var(--font-mono)}
+    .filter-card{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+    .filter-head{display:flex;align-items:center;gap:10px;font-size:.85rem;font-weight:600;color:var(--text);margin-bottom:12px;cursor:pointer}
+    .filter-head input{width:16px;height:16px;accent-color:var(--gold)}
+    .filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;align-items:end}
+    .filter-grid.disabled{opacity:.4;pointer-events:none}
+    .chk{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--text-sub);padding:9px 0}
+    .chk input{width:16px;height:16px;accent-color:var(--gold)}
+    .hint{font-size:.75rem;color:var(--text-muted);margin-top:10px;line-height:1.6}
+    .rank-badge{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-family:var(--font-mono);font-size:.78rem;font-weight:600;background:var(--bg-hover);color:var(--text-sub)}
+    tr.selected .rank-badge{background:var(--gold);color:#0D1117}
+    .chart-box{position:relative;height:340px}
+    @media(max-width:640px){.chart-box{height:260px}}
+    .funds-table td.name{white-space:nowrap}
+    .num{font-family:var(--font-mono);text-align:right;white-space:nowrap}
+    th.num{text-align:right}
+    .loading{display:flex;align-items:center;gap:10px;color:var(--text-muted);padding:40px 0;justify-content:center}
+    .spinner{width:18px;height:18px;border:2px solid var(--border-em);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="index.html" class="logo">Fund<span>Lens</span></a>
+      <nav class="main-nav">
+        <a href="index.html">首頁</a>
+        <a href="screen.html" class="active">成分股篩選</a>
+        <a href="compare.html">組合比較</a>
+        <a href="score.html">評分排名</a>
+        <a href="allocate.html">資產配置</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="fund-title-bar">
+    <div class="container fund-title-inner">
+      <div>
+        <h1 class="fund-name">ETF 成分股篩選</h1>
+        <p class="fund-meta">以 ETF 成分股為母體，先以財務指標篩選，再依報酬率排序取前 N 名組成等權重組合，並與 ETF 本身比較</p>
+      </div>
+    </div>
+  </div>
+
+  <main class="container page-main">
+
+    <div class="card">
+      <div class="controls">
+        <div class="ctl">
+          <label for="etfSelect">ETF</label>
+          <select id="etfSelect"></select>
+        </div>
+        <div class="ctl">
+          <label for="startDate">開始日期</label>
+          <input type="date" id="startDate" />
+        </div>
+        <div class="ctl">
+          <label for="endDate">結束日期</label>
+          <input type="date" id="endDate" />
+        </div>
+        <div class="ctl">
+          <label for="sortKey">排序依據</label>
+          <select id="sortKey">
+            <option value="period_return">期間報酬率</option>
+            <option value="annualized_return">年化報酬率</option>
+            <option value="sharpe">夏普值</option>
+            <option value="annualized_std">年化波動率（低→高）</option>
+            <option value="mdd">最大回檔（小→大）</option>
+          </select>
+        </div>
+        <div class="ctl">
+          <label>取前幾名</label>
+          <div class="period-tabs topn-tabs" id="topnTabs" style="margin-bottom:0">
+            <button class="period-btn" data-n="1">1</button>
+            <button class="period-btn" data-n="2">2</button>
+            <button class="period-btn active" data-n="3">3</button>
+          </div>
+        </div>
+        <div class="ctl">
+          <button id="runBtn" class="btn btn-primary" style="width:100%;justify-content:center;padding:10px">開始篩選</button>
+        </div>
+      </div>
+      <p class="notice" id="etfNotice" style="display:none"></p>
+
+      <div class="filter-card">
+        <label class="filter-head"><input type="checkbox" id="useFilter" checked /> 財務指標篩選（論文 3.3.1）</label>
+        <div class="filter-grid" id="filterGrid">
+          <div class="ctl">
+            <label for="roeMin">ROE 五年平均 ＞（%）</label>
+            <input type="number" id="roeMin" value="10" step="0.5" placeholder="留空 = 不檢查" />
+          </div>
+          <div class="ctl">
+            <label for="gmMin">毛利率五年平均 ＞（%）</label>
+            <input type="number" id="gmMin" value="15" step="0.5" placeholder="留空 = 不檢查" />
+          </div>
+          <div class="ctl">
+            <label class="chk"><input type="checkbox" id="epsPos" checked /> EPS 五年皆為正</label>
+          </div>
+          <div class="ctl">
+            <label for="finEnd">財報最後年度</label>
+            <input type="number" id="finEnd" step="1" />
+          </div>
+        </div>
+        <p class="hint" id="filterHint"></p>
+      </div>
+    </div>
+
+    <div id="result">
+      <p class="placeholder-text" style="text-align:center;padding:48px 0">選好條件後按「開始篩選」。第一次會逐檔抓股價與財報，約需 1 分鐘，之後會使用快取。</p>
+    </div>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container"><p>資料來源：FinMind｜本平台僅供學術研究，不構成投資建議</p></div>
+  </footer>
+
+  <script src="js/api.js"></script>
+  <script src="js/charts.js"></script>
+  <script>
+    const $ = id => document.getElementById(id);
+    let topN = 3;
+    let etfMeta = {};
+    let screenChart = null;
+
+    const pctClass = v => v == null ? "" : (v >= 0 ? "val-good" : "val-bad");
+    const pctCell  = v => `<td class="num ${pctClass(v)}">${fmt(v, "pct2")}</td>`;
+    const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+    // ── 初始化 ──────────────────────────────────
+    (async function init() {
+      const today = new Date();
+      const iso = d => d.toISOString().slice(0, 10);
+      $("startDate").value = `${today.getFullYear()}-01-01`;
+      $("endDate").value   = iso(today);
+
+      $("topnTabs").addEventListener("click", e => {
+        const b = e.target.closest("button[data-n]");
+        if (!b) return;
+        document.querySelectorAll("#topnTabs .period-btn").forEach(x => x.classList.toggle("active", x === b));
+        topN = Number(b.dataset.n);
+      });
+      $("runBtn").addEventListener("click", run);
+
+      // 財報年度預設為開始日期的前一年；使用者手動改過就不再自動帶入
+      let finEndTouched = false;
+      const syncFinEnd = () => {
+        if (!finEndTouched) $("finEnd").value = Number($("startDate").value.slice(0, 4)) - 1;
+        updateFilterHint();
+      };
+      $("finEnd").addEventListener("input", () => { finEndTouched = true; updateFilterHint(); });
+      $("startDate").addEventListener("change", () => { syncFinEnd(); showEtfNotice(); });
+      $("useFilter").addEventListener("change", () => {
+        $("filterGrid").classList.toggle("disabled", !$("useFilter").checked);
+        updateFilterHint();
+      });
+      syncFinEnd();
+      $("etfSelect").addEventListener("change", showEtfNotice);
+
+      try {
+        const etfs = await getEtfs();
+        etfs.forEach(e => etfMeta[e.etf_id] = e);
+        $("etfSelect").innerHTML = etfs.map(e =>
+          `<option value="${esc(e.etf_id)}">${esc(e.etf_id)} ${esc(e.name)}（${e.count} 檔）</option>`).join("");
+        showEtfNotice();
+      } catch (err) {
+        showError("result", `無法連線後端：${err.message}`);
+      }
+    })();
+
+    function updateFilterHint() {
+      const y = Number($("finEnd").value);
+      $("filterHint").textContent = $("useFilter").checked
+        ? `使用 ${y - 4}～${y} 年財報（共 5 年）。金融股沒有毛利率，目前直接排除；未通過篩選的股票不參與排名。`
+        : "未啟用財務篩選，全部成分股直接依報酬率排序。";
+    }
+
+    function showEtfNotice() {
+      const e = etfMeta[$("etfSelect").value];
+      const el = $("etfNotice");
+      if (!e) { el.style.display = "none"; return; }
+      el.style.display = "block";
+      el.textContent = e.as_of
+        ? `成分股名單日期：${e.as_of}（${e.source || ""}）。固定成分股，研究期間不隨 ETF 換股。`
+        : `目前只有 ${e.count} 檔示範成分股，完整名單匯入後會顯示名單日期`;
+      // 選了期末名單、開始日又早於名單日期 → 提醒有前視偏誤
+      el.classList.toggle("warn", !!(e.as_of && $("startDate").value && e.as_of > $("startDate").value));
+      if (el.classList.contains("warn"))
+        el.textContent += ` ⚠ 名單日期晚於開始日期，會納入期間內才被加入的股票，報酬會被高估，僅供對照。`;
+    }
+
+    // ── 執行篩選 ────────────────────────────────
+    async function run() {
+      const etfId = $("etfSelect").value;
+      const params = {
+        start: $("startDate").value,
+        end:   $("endDate").value,
+        sort:  $("sortKey").value,
+        top:   topN,
+        filter: $("useFilter").checked ? 1 : 0,
+      };
+      if ($("useFilter").checked) {
+        Object.assign(params, {
+          roe_min: $("roeMin").value,          // 空字串 = 不檢查
+          gm_min:  $("gmMin").value,
+          eps_pos: $("epsPos").checked ? 1 : 0,
+          fin_end: $("finEnd").value,
+        });
+      }
+      $("runBtn").disabled = true;
+      $("result").innerHTML = `<div class="loading"><div class="spinner"></div>抓取股價與財報、計算中…（第一次約需 1 分鐘）</div>`;
+      try {
+        render(await screenEtf(etfId, params));
+      } catch (err) {
+        showError("result", err.message);
+      } finally {
+        $("runBtn").disabled = false;
+      }
+    }
+
+    // ── 畫面 ────────────────────────────────────
+    function render(d) {
+      const pm = d.portfolio.metrics || {}, bm = d.benchmark.metrics || {};
+      const diff = (pm.period_return != null && bm.period_return != null) ? pm.period_return - bm.period_return : null;
+      const names = d.rankings.filter(r => r.selected).map(r => `${r.name}（${r.stock_id}）`).join("、");
+
+      const notices = [];
+      const src = (d.price_sources || []).join("、") || "—";
+      if (d.adjusted) notices.push(`<p class="notice">股價來源：${esc(src)}（已含配息與分割調整）</p>`);
+      else notices.push(`<p class="notice warn">股價來源：${esc(src)}。部分股票使用<strong>未還原</strong>收盤價，報酬率未含配息，會略為低估。</p>`);
+      const f = d.filter || {};
+      if (f.enabled) {
+        const y = f.fin_years || [];
+        notices.push(`<p class="notice">財務篩選：${f.passed} / ${f.total} 檔通過（${y[0]}～${y[y.length - 1]} 年財報）。未通過的股票列在表格最下方，並標示原因。</p>`);
+      }
+      if (!names) notices.push(`<p class="notice warn">沒有股票通過篩選，請放寬門檻。</p>`);
+      if (d.errors.length) notices.push(`<p class="notice warn">以下成分股抓不到股價，未納入排序：${d.errors.map(e => esc(`${e.name || ""}（${e.stock_id}）`)).join("、")}</p>`);
+
+      $("result").innerHTML = `
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="metric-label">${esc(d.portfolio.label)}</div>
+            <div class="metric-value ${pctClass(pm.period_return)}">${fmt(pm.period_return, "pct2")}</div>
+            <div class="sub">${esc(names) || "—"}</div>
+          </div>
+          <div class="summary-card">
+            <div class="metric-label">${esc(d.benchmark.label)}</div>
+            <div class="metric-value ${pctClass(bm.period_return)}">${fmt(bm.period_return, "pct2")}</div>
+            <div class="sub">ETF 本身同期間報酬</div>
+          </div>
+          <div class="summary-card">
+            <div class="metric-label">超額報酬</div>
+            <div class="metric-value ${pctClass(diff)}">${diff == null ? "—" : (diff >= 0 ? "+" : "") + fmt(diff, "pct2")}</div>
+            <div class="sub">${esc(d.window.start)} ～ ${esc(d.window.end)}</div>
+          </div>
+        </div>
+        ${notices.join("")}
+
+        <div class="card chart-card" style="margin:16px 0">
+          <h3 class="card-title">走勢比較（起點 = 100）</h3>
+          <div class="chart-box"><canvas id="screenChart"></canvas></div>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">成分股排序｜依${esc(d.sort.label)}</h3>
+          <div class="table-wrapper">
+            <table class="funds-table">
+              <thead><tr>
+                <th>名次</th><th>代號</th><th>名稱</th>
+                <th class="num">期間報酬率</th><th class="num">年化報酬率</th>
+                <th class="num">年化波動率</th><th class="num">夏普值</th><th class="num">最大回檔</th>
+                ${f.enabled ? `<th class="num">ROE 平均</th><th class="num">EPS 最低</th><th class="num">毛利率平均</th><th>篩選</th>` : ""}
+              </tr></thead>
+              <tbody>${d.rankings.map(r => rowHtml(r, f.enabled)).join("")}</tbody>
+            </table>
+          </div>
+          <p class="placeholder-text" style="margin-top:12px;font-size:.78rem">
+            同一段期間內，期間報酬率與年化報酬率的排序結果相同；年化報酬率是把期間報酬換算成一年，期間未滿一年時僅供參考。
+          </p>
+        </div>`;
+
+      drawScreenChart(d);
+    }
+
+    function rowHtml(r, withFilter) {
+      const m = r.metrics || {};
+      const flt = r.filter || {}, v = flt.values || {};
+      const cls = r.selected ? "selected" : (r.passed_filter === false ? "excluded" : "");
+      const num = (x, suffix = "") => x == null ? "—" : x.toFixed(2) + suffix;
+      const filterCells = !withFilter ? "" : `
+        <td class="num">${num(v.roe_avg, "%")}</td>
+        <td class="num">${num(v.eps_min)}</td>
+        <td class="num">${num(v.gross_margin_avg, "%")}</td>
+        <td class="${flt.passed ? "pass" : "reason"}">${flt.passed ? "✓ 通過" : esc((flt.reasons || []).join("；") || "未通過")}</td>`;
+      return `<tr class="${cls}">
+        <td><span class="rank-badge">${r.rank ?? "—"}</span></td>
+        <td class="mono">${esc(r.stock_id)}</td>
+        <td class="name">${esc(r.name)}${r.weight == null ? "" : `<span class="w-sub">權重 ${r.weight.toFixed(2)}%</span>`}</td>
+        ${pctCell(m.period_return)}
+        ${pctCell(m.annualized_return)}
+        <td class="num">${fmt(m.annualized_std, "pct2")}</td>
+        <td class="num">${fmt(m.sharpe, "ratio")}</td>
+        <td class="num val-bad">${fmt(m.mdd, "pct2")}</td>
+        ${filterCells}
+      </tr>`;
+    }
+
+    function drawScreenChart(d) {
+      if (screenChart) screenChart.destroy();
+      const lines = [
+        { label: d.portfolio.label, series: d.portfolio.series, color: CHART_COLORS.gold,  width: 3 },
+        { label: d.benchmark.label, series: d.benchmark.series, color: "#E6EDF3", width: 2, dash: [6, 4] },
+        ...d.selected_series.map((s, i) => ({
+          label: `${s.name}（${s.stock_id}）`, series: s.series,
+          color: ["#60A5FA", "#3DD68C", "#A78BFA"][i % 3], width: 1.5,
+        })),
+      ];
+      // 以日期對齊（各股交易日可能不同）
+      const dates = [...new Set(lines.flatMap(l => l.series.map(p => p.date)))].sort();
+      screenChart = new Chart($("screenChart").getContext("2d"), {
+        type: "line",
+        data: {
+          labels: dates,
+          datasets: lines.map(l => {
+            const map = new Map(l.series.map(p => [p.date, p.normalized]));
+            return {
+              label: l.label, data: dates.map(dt => map.get(dt) ?? null),
+              borderColor: l.color, backgroundColor: "transparent",
+              borderWidth: l.width, borderDash: l.dash || [], pointRadius: 0, tension: .2, spanGaps: true,
+            };
+          }),
+        },
+        options: {
+          ...BASE_OPTIONS,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            ...BASE_OPTIONS.plugins,
+            tooltip: { ...BASE_OPTIONS.plugins.tooltip,
+              callbacks: { label: it => it.raw == null ? null : ` ${it.dataset.label}：${Number(it.raw).toFixed(1)}` } },
+          },
+        },
+      });
+    }
+  </script>
+</body>
+</html>

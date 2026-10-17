@@ -157,3 +157,12 @@ function showError(containerId, msg) {
   const el = document.getElementById(containerId);
   if (el) el.innerHTML = `<p class="error-msg">⚠️ ${msg}</p>`;
 }
+// ── ETF 成分股篩選 ──────────────────────────────
+async function getEtfs() {
+  return apiFetch("/etfs");
+}
+
+async function screenEtf(etfId, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return apiFetch(`/etfs/${etfId}/screen${query ? "?" + query : ""}`);
+}

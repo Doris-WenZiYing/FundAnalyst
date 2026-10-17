@@ -124,6 +124,14 @@ a:hover { text-decoration: underline; }
   background: var(--gold-dim);
 }
 
+.main-nav a { white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .header-inner { flex-wrap: wrap; height: auto; padding: 10px 0; gap: 6px; }
+  .main-nav { width: 100%; overflow-x: auto; }
+  .main-nav a { padding: 6px 10px; }
+}
+
 /* ── Buttons ─────────────────────────────────── */
 .btn {
   display: inline-flex;
