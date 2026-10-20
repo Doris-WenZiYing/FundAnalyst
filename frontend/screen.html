@@ -143,8 +143,9 @@
     <div class="container"><p>資料來源：FinMind｜本平台僅供學術研究，不構成投資建議</p></div>
   </footer>
 
-  <script src="js/api.js"></script>
-  <script src="js/charts.js"></script>
+  <!-- ?v= 避免瀏覽器快取到舊版 js；js 有改動時把數字加 1 -->
+  <script src="js/api.js?v=2"></script>
+  <script src="js/charts.js?v=2"></script>
   <script>
     const $ = id => document.getElementById(id);
     let topN = 3;

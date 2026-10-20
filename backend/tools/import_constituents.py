@@ -73,16 +73,26 @@ def main(argv=None):
         with open(a.data, encoding="utf-8") as f:
             data = json.load(f)
 
-    data[a.etf_id] = {
+    # 有日期的名單存成「代號@日期」，不會蓋掉研究開始日名單（"0050"，由 build_start_list.py 產生）
+    key = f"{a.etf_id}@{a.as_of}" if a.as_of else a.etf_id
+    entry = {
         "name":         a.etf_name,
         "as_of":        a.as_of,
         "source":       os.path.basename(a.csv_path),
         "constituents": constituents,
     }
+    if a.as_of:
+        entry["name"] = f"{a.etf_name}（{a.as_of} 名單，僅供對照）"
+        entry["benchmark_id"] = a.etf_id
+    data[key] = entry
     with open(a.data, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-    print(f"已匯入 {a.etf_id} {a.etf_name}：{len(constituents)} 檔")
+    print(f"已匯入 {key} {a.etf_name}：{len(constituents)} 檔")
+    if len(constituents) < 10:
+        print(f"⚠ 只讀到 {len(constituents)} 檔，請確認 CSV 是完整的成分股表，而不是範例資料")
+    if a.as_of:
+        print(f"下一步：python tools/build_start_list.py {a.etf_id} <研究開始日>，產生研究用的年初名單")
 
 
 if __name__ == "__main__":

@@ -65,6 +65,17 @@ FundAnalyst/
 
 ## 環境建置（只需做一次）
 
+以下指令分 macOS 與 Windows 兩種。Windows 一律使用 **PowerShell**（開始選單搜尋「PowerShell」或「終端機」），專案路徑請換成實際放的位置。
+
+| 動作 | macOS（Terminal） | Windows（PowerShell） |
+|------|-------------------|------------------------|
+| Python 指令 | `python3` | `python` |
+| 啟動虛擬環境 | `source venv/bin/activate` | `.\venv\Scripts\Activate.ps1` |
+| 設定 FinMind token | `export FINMIND_TOKEN="token"` | `$env:FINMIND_TOKEN="token"` |
+| 下載資料夾 | `~/Downloads` | `$HOME\Downloads` |
+
+**macOS**
+
 ```bash
 cd ~/Developer/FundAnalyst
 python3 -m venv venv
@@ -72,17 +83,43 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+**Windows（PowerShell）**
+
+先安裝 Python 3.9 以上（[python.org](https://www.python.org/downloads/)），安裝時勾選 **Add Python to PATH**。
+
+```powershell
+cd C:\Users\你的名字\FundAnalyst
+python -m venv venv
+
+# 第一次啟動虛擬環境若出現「已停用指令碼執行」，先執行這行（只需一次）
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
 `requirements.txt` 需包含 `yfinance`（第二階段還原股價使用）。
+
+> Windows 終端機顯示中文若出現亂碼或 `UnicodeEncodeError`，在執行 Python 前先下 `$env:PYTHONUTF8="1"`。
 
 ### 建立 MoneyDJ × FinMind 對照表（第一階段功能需要）
 
 MoneyDJ 使用自己的基金代號（ACFP132），FinMind 使用證交所代號（00892）。
 
 ```bash
+# macOS
 source venv/bin/activate
 export FINMIND_TOKEN="貼上你的token"
 cd backend
 python3 fund_mapper.py
+```
+
+```powershell
+# Windows（PowerShell）
+.\venv\Scripts\Activate.ps1
+$env:FINMIND_TOKEN="貼上你的token"
+cd backend
+python fund_mapper.py
 ```
 
 會產生 `backend/fund_mapping.json`，有新 ETF 上市時再重跑即可。
@@ -95,9 +132,10 @@ python3 fund_mapper.py
 
 ## 啟動
 
-### Terminal 1 — 後端
+### 視窗 1 — 後端
 
 ```bash
+# macOS
 cd ~/Developer/FundAnalyst
 source venv/bin/activate
 export FINMIND_TOKEN="貼上你的token"
@@ -105,13 +143,34 @@ cd backend
 python3 app.py
 ```
 
+```powershell
+# Windows（PowerShell）
+cd C:\Users\你的名字\FundAnalyst
+.\venv\Scripts\Activate.ps1
+$env:FINMIND_TOKEN="貼上你的token"
+$env:PYTHONUTF8="1"
+cd backend
+python app.py
+```
+
+token 只在目前這個視窗有效，關掉視窗後重開要再設定一次。
+
 看到 `Running on http://127.0.0.1:5000` 代表後端正常。
 
-### Terminal 2 — 前端
+### 視窗 2 — 前端
+
+另開一個終端機視窗：
 
 ```bash
+# macOS
 cd ~/Developer/FundAnalyst/frontend
 python3 -m http.server 8080
+```
+
+```powershell
+# Windows（PowerShell）
+cd C:\Users\你的名字\FundAnalyst\frontend
+python -m http.server 8080
 ```
 
 > 不要用 VS Code Live Server 開前端：後端抓資料時會一直寫快取檔，Live Server 偵測到檔案變動就會不斷重新整理頁面。
@@ -236,6 +295,8 @@ MoneyDJ 與基金資訊觀測站的 RR 評級以 JavaScript 動態載入，無�
 
 ### 更新成分股名單
 
+> **git 裡已經包含 0050 的完整名單（年初 50 檔 + 2026/10/16 期末 50 檔），直接啟動就能用，不需要再匯入。** 以下步驟只有在要更新名單或新增其他 ETF 時才需要。
+
 系統內每檔 ETF 有兩份名單：
 
 | 名單 | 用途 |
@@ -245,7 +306,7 @@ MoneyDJ 與基金資訊觀測站的 RR 評級以 JavaScript 動態載入，無�
 
 **步驟 1：匯入目前名單**
 
-從玩股網 `https://www.wantgoo.com/stock/etf/0050/constituent` 或投信官網複製持股明細，整理成 UTF-8 CSV：
+從玩股網 `https://www.wantgoo.com/stock/etf/0050/constituent` 或投信官網複製持股明細（玩股網沒有下載按鈕，直接選取表格複製），貼到 Excel，只留三欄，第一列是標題：
 
 ```
 代號,名稱,權重
@@ -253,15 +314,38 @@ MoneyDJ 與基金資訊觀測站的 RR 評級以 JavaScript 動態載入，無�
 2454,聯發科,5.99
 ```
 
+存成 **UTF-8 的 CSV**，不然中文會變亂碼：
+
+- **Windows Excel**：檔案 → 另存新檔 → 存檔類型選「**CSV UTF-8（逗號分隔）(*.csv)**」。不要選一般的「CSV（逗號分隔）」，那是 Big5 編碼
+- **macOS Excel**：另存新檔 → 格式選「CSV UTF-8（逗號分隔）」
+- **macOS Numbers**：檔案 → 輸出至 → CSV → 文字編碼選 Unicode (UTF-8)
+
+存到「下載」資料夾，檔名 `0050.csv`，然後匯入：
+
 ```bash
+# macOS
 cd backend
 python3 tools/import_constituents.py 0050 元大台灣50 ~/Downloads/0050.csv --as-of 2026-10-16
 ```
 
+```powershell
+# Windows（PowerShell）
+cd backend
+python tools\import_constituents.py 0050 元大台灣50 "$HOME\Downloads\0050.csv" --as-of 2026-10-16
+```
+
+成功會顯示 `已匯入 0050@2026-10-16 元大台灣50：50 檔`。名單會存成「代號@日期」，不會蓋掉研究用的年初名單。若只讀到幾檔，代表 CSV 不完整（例如只放了上面的範例兩筆）。
+
 **步驟 2：反推研究開始日名單**
 
 ```bash
+# macOS
 python3 tools/build_start_list.py 0050 2026-01-01
+```
+
+```powershell
+# Windows（PowerShell）
+python tools\build_start_list.py 0050 2026-01-01
 ```
 
 會依 `data/index_changes_0050.json` 倒序撤銷開始日之後的每次審核（刪掉當次納入、加回當次刪除）。
@@ -299,6 +383,8 @@ python3 tools/verify_data.py 2330 2317 0050 --start 2026-01-01 --end 2026-10-16
 # 財報：與 Goodinfo / 財報狗的年度 ROE、EPS、毛利率比對
 python3 tools/verify_data.py 2330 2317 2881 --fin 2025
 ```
+
+Windows 把 `python3` 換成 `python`、`tools/` 換成 `tools\`，其餘相同。本節其他 `python3 -c "..."` 指令在 PowerShell 也可直接貼上執行（`python3` 改成 `python`）。
 
 - EPS、毛利率應與公開年報一致；ROE 因各網站計算方式不同，差 1～2 個百分點屬正常
 - 2026/10 已抽查台積電、鴻海、富邦金、和泰車，皆與年報一致
@@ -374,7 +460,7 @@ for fid, name in [('0050','元大台灣50'),('00679B','元大美債20年'),('008
 
 ```bash
 cd backend
-python3 -m pytest tests -q
+python3 -m pytest tests -q      # Windows：python -m pytest tests -q
 ```
 
 不需網路（股價與財報用假資料）。涵蓋：績效計算、排序、財務篩選（含論文案例：華碩毛利率 14.43% 應被排除）、財報年度化、年初名單反推、還原股價來源切換、第一階段年化修正。
@@ -396,6 +482,14 @@ rm -f scraper/cache/price_*.json scraper/cache/fin_*.json
 python3 -c "from scraper.moneydj import scrape_fund_list; scrape_fund_list(use_cache=False)"
 ```
 
+Windows（PowerShell）只清股價與財報快取：
+
+```powershell
+Remove-Item scraper\cache\price_*.json, scraper\cache\fin_*.json
+```
+
+其他兩行把 `python3` 換成 `python` 即可。
+
 ### FinMind 請求量
 
 - 免費方案有請求次數上限，以 FinMind 官網公告為準
@@ -407,7 +501,19 @@ python3 -c "from scraper.moneydj import scrape_fund_list; scrape_fund_list(use_c
 ## 常見問題
 
 **`ModuleNotFoundError: No module named 'flask'`**
-→ 虛擬環境沒啟動：`source venv/bin/activate`
+→ 虛擬環境沒啟動：macOS `source venv/bin/activate`，Windows `.\venv\Scripts\Activate.ps1`
+
+**Windows：`Activate.ps1 無法載入，因為這個系統上已停用指令碼執行`**
+→ 執行一次 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`，再重新啟動虛擬環境
+
+**Windows：`'python3' 不是內部或外部命令`**
+→ Windows 請用 `python`，不是 `python3`
+
+**Windows：中文亂碼或 `UnicodeEncodeError`**
+→ 先執行 `$env:PYTHONUTF8="1"` 再跑 Python
+
+**匯入成分股後名稱變亂碼，或顯示「CSV 裡沒有讀到任何股票代號」**
+→ CSV 不是 UTF-8。Excel 另存時要選「CSV UTF-8（逗號分隔）」
 
 **`ModuleNotFoundError: No module named 'data_source'` 或其他舊檔案不見**
 → 解壓更新檔時用了 Finder「取代」，整個資料夾被換掉。救回被刪的檔案：
@@ -417,7 +523,7 @@ git ls-files -d | xargs git checkout --
 之後一律用 `unzip -o 檔案.zip` 解壓。
 
 **`400 Bad Request` 打 FinMind API**
-→ Token 有空白或換行，重新 `export FINMIND_TOKEN="token"`
+→ Token 有空白或換行，或這個視窗沒設定 token。重新設定：macOS `export FINMIND_TOKEN="token"`，Windows `$env:FINMIND_TOKEN="token"`
 
 **成分股篩選頁一直重新整理**
 → 用了 VS Code Live Server。改用 `python3 -m http.server 8080`
@@ -427,6 +533,9 @@ git ls-files -d | xargs git checkout --
 
 **成分股篩選第一次很慢（1～2 分鐘）**
 → 正常，需逐檔抓股價與財報；之後走快取
+
+**網頁顯示「無法連線後端：getEtfs is not defined」**
+→ 瀏覽器用到快取的舊版 js。按 **Ctrl + F5**（macOS：Cmd + Shift + R）強制重新整理；也確認前端視窗是在**新版**專案的 `frontend` 資料夾啟動，舊版的伺服器視窗要先關掉
 
 **前端空白或 API 失敗**
 → 確認後端有跑（Terminal 1 顯示 Running on 5000），前端用 `http://localhost:8080` 開

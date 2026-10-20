@@ -9,7 +9,7 @@ build_start_list.py — 由「期末成分股名單」反推「研究開始日�
 
 用法（在 backend/ 底下）：
     python tools/build_start_list.py 0050 2026-01-01
-會讀取 data/etf_constituents.json 裡的 "0050@期末日期"（或 "0050"）當作期末名單，
+會讀取 data/etf_constituents.json 裡日期最新的 "0050@日期" 當作期末名單，
 寫回：
     "0050"            → 研究開始日名單（排序、篩選預設用這份）
     "0050@<期末日期>"  → 期末名單（保留做對照）
@@ -57,17 +57,25 @@ def main(argv=None):
     with open(changes_path, encoding="utf-8") as f:
         changes = json.load(f)["changes"]
 
-    end_key = next((k for k in data if k.startswith(f"{a.etf_id}@")), a.etf_id)
+    # 期末名單 = 日期最新的「代號@日期」；沒有的話退回「代號」（舊版匯入方式）
+    dated = [k for k in data if k.startswith(f"{a.etf_id}@") and data[k].get("as_of")]
+    end_key = max(dated, key=lambda k: data[k]["as_of"]) if dated else a.etf_id
+    if end_key not in data:
+        sys.exit(f"找不到 {a.etf_id} 的名單，請先用 import_constituents.py 匯入")
     end = data[end_key]
     if not end.get("as_of"):
         sys.exit("期末名單沒有 as_of 日期，請先用 import_constituents.py --as-of 匯入")
 
-    start_list, applied = rebuild(end["constituents"], changes, a.start)
-    end_key = f"{a.etf_id}@{end['as_of']}"
+    try:
+        start_list, applied = rebuild(end["constituents"], changes, a.start)
+    except ValueError as e:
+        sys.exit(f"{e}\n（使用的期末名單：{end_key}，{len(end['constituents'])} 檔。請確認匯入的 CSV 是完整名單）")
     base_name = end["name"].split("（")[0]
 
-    data[end_key] = {**end, "name": f"{base_name}（{end['as_of']} 期末名單，僅供對照）",
-                     "benchmark_id": a.etf_id}
+    if end_key != f"{a.etf_id}@{end['as_of']}":
+        data.pop(end_key, None)               # 舊版格式（存在「代號」底下）搬到「代號@日期」
+    data[f"{a.etf_id}@{end['as_of']}"] = {**end, "name": f"{base_name}（{end['as_of']} 期末名單，僅供對照）",
+                                          "benchmark_id": a.etf_id}
     data[a.etf_id] = {
         "name":         base_name,
         "as_of":        a.start,

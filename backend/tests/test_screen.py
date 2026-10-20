@@ -362,3 +362,41 @@ def test_hotai_2022_loss_matches():
     rows += [{"date": f"2022-{Q[q]}", "type": "Revenue", "value": 6e10} for q in (1, 2, 3, 4)]
     out = compute_annual(rows, [], [2022])
     assert out["eps"] == [-35.39]
+
+
+# ── 匯入 → 反推 完整流程 ─────────────────────────
+def _run_tool(name, argv):
+    import importlib.util, os
+    spec = importlib.util.spec_from_file_location(name, os.path.join(os.path.dirname(__file__), "..", "tools", f"{name}.py"))
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    return mod.main(argv)
+
+
+def test_import_then_build_flow(tmp_path):
+    import json, shutil, os
+    base = os.path.join(os.path.dirname(__file__), "..", "data")
+    data = tmp_path / "c.json"
+    shutil.copy(os.path.join(base, "etf_constituents.json"), data)
+    changes = os.path.join(base, "index_changes_0050.json")
+    before = json.loads(data.read_text(encoding="utf-8"))
+
+    # 範例 CSV 只有 2 檔：匯入不會蓋掉年初名單 "0050"
+    small = tmp_path / "small.csv"
+    small.write_text("代號,名稱,權重\n2330,台積電,56.66\n2454,聯發科,5.99\n", encoding="utf-8-sig")
+    _run_tool("import_constituents", ["0050", "元大台灣50", str(small), "--as-of", "2026-10-20", "--data", str(data)])
+    d = json.loads(data.read_text(encoding="utf-8"))
+    assert d["0050"] == before["0050"] and len(d["0050@2026-10-20"]["constituents"]) == 2
+
+    # 反推時用最新的 2 檔名單 → 應該明確報錯，而不是默默產生錯的名單
+    with pytest.raises(SystemExit) as e:
+        _run_tool("build_start_list", ["0050", "2026-01-01", "--data", str(data), "--changes", changes])
+    assert "0050@2026-10-20" in str(e.value)
+
+    # 匯入完整名單後重跑，年初名單與原本一致
+    full = tmp_path / "full.csv"
+    rows = before["0050@2026-10-16"]["constituents"]
+    full.write_text("代號,名稱,權重\n" + "".join(f"{c['stock_id']},{c['name']},{c['weight']}\n" for c in rows), encoding="utf-8-sig")
+    _run_tool("import_constituents", ["0050", "元大台灣50", str(full), "--as-of", "2026-10-20", "--data", str(data)])
+    _run_tool("build_start_list", ["0050", "2026-01-01", "--data", str(data), "--changes", changes])
+    d = json.loads(data.read_text(encoding="utf-8"))
+    assert {c["stock_id"] for c in d["0050"]["constituents"]} == {c["stock_id"] for c in before["0050"]["constituents"]}
