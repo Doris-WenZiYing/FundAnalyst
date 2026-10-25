@@ -40,7 +40,8 @@ def list_etfs() -> list:
     data = _load_constituent_file()
     return [
         {"etf_id": k, "name": v.get("name", k), "as_of": v.get("as_of"),
-         "source": v.get("source"), "count": len(v.get("constituents", []))}
+         "source": v.get("source"), "count": len(v.get("constituents", [])),
+         "excluded": len(v.get("excluded_stocks") or {})}
         for k, v in data.items()
     ]
 

@@ -76,6 +76,7 @@ def main(argv=None):
         data.pop(end_key, None)               # 舊版格式（存在「代號」底下）搬到「代號@日期」
     data[f"{a.etf_id}@{end['as_of']}"] = {**end, "name": f"{base_name}（{end['as_of']} 期末名單，僅供對照）",
                                           "benchmark_id": a.etf_id}
+    excluded = (data.get(a.etf_id) or {}).get("excluded_stocks")     # 保留手動設定的「暫不使用」清單
     data[a.etf_id] = {
         "name":         base_name,
         "as_of":        a.start,
@@ -83,6 +84,8 @@ def main(argv=None):
         "benchmark_id": a.etf_id,
         "constituents": start_list,
     }
+    if excluded:
+        data[a.etf_id]["excluded_stocks"] = excluded
     with open(a.data, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 

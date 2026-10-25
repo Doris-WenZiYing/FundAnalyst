@@ -83,30 +83,34 @@ def test_thesis_rules():
     # 華碩案例：毛利率五年平均 14.43%，依論文條件應被排除
     asus = _fin([12.655] * 5, [21.11] * 5, [14.432] * 5)
     res = financial_filter(asus)
-    assert not res["passed"] and res["checks"]["gross_margin_avg"] is False
+    assert not res["passed"] and res["checks"]["gross_margin"] is False
     assert any("毛利率" in r for r in res["reasons"])
 
     neg_eps = _fin([12] * 5, [1, -0.5, 2, 2, 2], [20] * 5)
     assert not financial_filter(neg_eps)["passed"]
 
 
-def test_financial_stock_excluded():
+def test_financial_stock_ignores_gross_margin():
+    """教授：篩金融股時自動忽略毛利"""
     bank = _fin([11] * 5, [2] * 5, [None] * 5, financial=True)
     res = financial_filter(bank)
-    assert not res["passed"] and res["checks"]["not_financial"] is False
-    assert any("金融股" in r for r in res["reasons"])
+    assert res["passed"] and res["checks"]["gross_margin"] == "skip" and res["skipped"] == ["毛利率"]
+    # 其他條件照常檢查：ROE 不到 10% 仍會被篩掉
+    low = _fin([8] * 5, [2] * 5, [None] * 5, financial=True)
+    assert not financial_filter(low)["passed"]
 
 
 def test_missing_year_fails():
     gap = _fin([12, None, 12, 12, 12], [1] * 5, [20] * 5)
     res = financial_filter(gap)
-    assert not res["passed"] and res["checks"]["complete"] is False
+    assert not res["passed"] and res["checks"]["roe"] is False
+    assert res["reasons"][0] == "財報不足 5 年（ROE）"
 
 
 def test_rule_can_be_disabled():
     low_gm = _fin([12] * 5, [1] * 5, [10] * 5)
     assert not financial_filter(low_gm)["passed"]
-    assert financial_filter(low_gm, {"gross_margin_avg_min": None})["passed"]
+    assert financial_filter(low_gm, {"gross_margin": None})["passed"]
 
 
 def test_no_fundamentals_fails():
@@ -400,3 +404,117 @@ def test_import_then_build_flow(tmp_path):
     _run_tool("build_start_list", ["0050", "2026-01-01", "--data", str(data), "--changes", changes])
     d = json.loads(data.read_text(encoding="utf-8"))
     assert {c["stock_id"] for c in d["0050"]["constituents"]} == {c["stock_id"] for c in before["0050"]["constituents"]}
+
+
+
+# ── 第 3 週：更多指標 ────────────────────────────
+def _fin_full(**over):
+    base = {"years": [2021, 2022, 2023, 2024, 2025], "roe": [15] * 5, "roa": [8] * 5, "eps": [5] * 5,
+            "gross_margin": [30] * 5, "operating_margin": [20] * 5, "net_margin": [15] * 5,
+            "debt_ratio": [40] * 5, "current_ratio": [180] * 5, "revenue_growth": [10] * 5,
+            "eps_growth": [12, None, 8, 10, 10], "is_financial": False}
+    return {**base, **over}
+
+
+def test_all_indicators_pass_and_directions():
+    rules = {"roa": 5, "operating_margin": 10, "net_margin": 10, "debt_ratio": 50, "current_ratio": 150,
+             "revenue_growth": 5, "eps_growth": 5, "per": 20, "pbr": 3, "dividend_yield": 2}
+    val = {"per": 15.0, "pbr": 2.0, "dividend_yield": 3.0}
+    res = financial_filter(_fin_full(), rules, val)
+    assert res["passed"], res["reasons"]
+    assert res["values"]["eps_growth"] == 10.0          # 缺的那年不列入（前一年 EPS ≤ 0）
+    # 負債比率是「越小越好」
+    assert not financial_filter(_fin_full(debt_ratio=[60] * 5), rules, val)["passed"]
+    # 本益比是「越小越好」，殖利率是「越大越好」
+    assert not financial_filter(_fin_full(), rules, {**val, "per": 25})["passed"]
+    assert not financial_filter(_fin_full(), rules, {**val, "dividend_yield": 1})["passed"]
+
+
+def test_loss_company_has_no_per():
+    res = financial_filter(_fin_full(), {"per": 20}, {"per": None, "pbr": 1, "dividend_yield": 0})
+    assert not res["passed"] and any("本益比" in r for r in res["reasons"])
+
+
+def test_financial_skips_non_applicable_indicators():
+    bank = _fin_full(is_financial=True, gross_margin=[None] * 5, operating_margin=[None] * 5,
+                     current_ratio=[None] * 5, debt_ratio=[93] * 5)
+    res = financial_filter(bank, {"operating_margin": 10, "debt_ratio": 50, "current_ratio": 150, "roa": 0.5})
+    assert res["passed"]
+    assert set(res["skipped"]) == {"毛利率", "營業利益率", "負債比率", "流動比率"}
+    assert res["checks"]["roa"] is True
+
+
+def test_all_blank_passes_everything():
+    blank = {k: None for k in ("roe", "gross_margin")}
+    blank["eps_positive"] = False
+    assert financial_filter(_fin_full(roe=[1] * 5, gross_margin=[1] * 5, eps=[-1] * 5), blank)["passed"]
+
+
+def test_compute_annual_new_indicators():
+    years = [2025]
+    fs = []
+    for q in (1, 2, 3, 4):
+        d = f"2025-{Q[q]}"
+        fs += [{"date": d, "type": t, "value": v} for t, v in
+               (("Revenue", 100), ("GrossProfit", 40), ("OperatingIncome", 25), ("IncomeAfterTaxes", 12),
+                ("EquityAttributableToOwnersOfParent", 10), ("EPS", 1))]
+        fs += [{"date": f"2024-{Q[q]}", "type": t, "value": v} for t, v in (("Revenue", 80), ("EPS", 0.8))]
+    bs = []
+    for y in (2024, 2025):
+        bs += [{"date": f"{y}-12-31", "type": t, "value": v} for t, v in
+               (("TotalAssets", 1000), ("Liabilities", 400), ("CurrentAssets", 300),
+                ("CurrentLiabilities", 150), ("EquityAttributableToOwnersOfParent", 500))]
+    out = compute_annual(fs, bs, years)
+    assert out["roe"] == [8.0]                 # 40 / 500
+    assert out["roa"] == [4.8]                 # 48 / 1000
+    assert out["operating_margin"] == [25.0]
+    assert out["net_margin"] == [12.0]
+    assert out["debt_ratio"] == [40.0]
+    assert out["current_ratio"] == [200.0]
+    assert out["revenue_growth"] == [25.0]     # 400 / 320 − 1
+    assert out["eps_growth"] == [25.0]         # 4 / 3.2 − 1
+
+
+def test_screen_with_new_indicator_params(client, monkeypatch):
+    import app as app_module
+    monkeypatch.setattr(app_module, "get_valuation", lambda sid, before: {"per": 30.0 if sid == "2330" else 10.0,
+                                                                          "pbr": 2.0, "dividend_yield": 3.0})
+    d = client.get("/etfs/0050/screen?start=2026-01-01&end=2026-10-08&top=2&per_max=20").get_json()
+    keys = [r["key"] for r in d["filter"]["rules"]]
+    assert keys == ["roe", "eps_positive", "gross_margin", "per"]
+    excluded = next(x for x in d["rankings"] if x["stock_id"] == "2330")
+    assert excluded["rank"] is None and any("本益比" in r for r in excluded["filter"]["reasons"])
+
+
+def test_indicator_catalog(client):
+    cat = client.get("/screen/indicators").get_json()
+    assert len(cat) == 13 and {c["group"] for c in cat} == {"盈餘能力", "財務穩健", "成長性", "價值評估"}
+
+
+
+def test_excluded_stocks_skipped(client, monkeypatch):
+    import app as app_module
+    data = app_module.get_constituents("0050")
+    monkeypatch.setattr(app_module, "get_constituents",
+                        lambda etf_id: {**data, "excluded_stocks": {"3711": "資料不完整"}})
+    d = client.get("/etfs/0050/screen?start=2026-01-01&end=2026-10-08&filter=0").get_json()
+    assert all(r["stock_id"] != "3711" for r in d["rankings"])
+    assert d["excluded_stocks"] == [{"stock_id": "3711", "name": "日月光投控", "reason": "資料不完整"}]
+
+
+def test_real_list_excludes_hotai():
+    import app as app_module
+    assert "2207" in app_module.get_constituents("0050")["excluded_stocks"]
+
+
+
+def test_missing_years_merged_into_one_reason():
+    """康霈：上市未滿 5 年，ROE、EPS、毛利率都缺年度 → 只顯示一句"""
+    new = _fin([None, None, -5, -6, -7], [None, None, -4, -4, -3], [None, None, 70, 69, 70])
+    res = financial_filter(new)
+    assert res["reasons"] == ["財報不足 5 年（ROE、EPS、毛利率）"]
+
+
+def test_etf_list_shows_excluded_count(client):
+    d = {e["etf_id"]: e for e in client.get("/etfs").get_json()}
+    assert d["0050"]["excluded"] == 1 and d["0050"]["count"] == 50

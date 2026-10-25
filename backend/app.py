@@ -290,10 +290,11 @@ def backtest():
 # ══════════════════════════════════════════════
 from datetime import date
 from stock_data import list_etfs, get_constituents, get_price_series
-from financials import get_fundamentals
+from financials import get_fundamentals, get_valuation
 from calculators.stock_selection import (
     stock_metrics, rank_stocks, equal_weight_portfolio,
     to_normalized_points, financial_filter, SORT_KEYS, THESIS_RULES,
+    INDICATORS, indicator_catalog, needs_valuation,
 )
 
 
@@ -308,12 +309,21 @@ def _float_arg(name, default):
 
 
 def _filter_rules_from_args():
-    return {
-        "roe_avg_min":          _float_arg("roe_min", THESIS_RULES["roe_avg_min"]),
-        "gross_margin_avg_min": _float_arg("gm_min",  THESIS_RULES["gross_margin_avg_min"]),
-        "eps_all_positive":     request.args.get("eps_pos", "1") != "0",
-        "exclude_financials":   True,
-    }
+    """每個指標對應一個 query 參數（見 INDICATORS 的 param）；沒帶參數用論文預設，空字串 = 不使用"""
+    rules = {}
+    for key, ind in INDICATORS.items():
+        if ind["kind"] == "all_positive":
+            rules[key] = request.args.get(ind["param"], "1" if ind["default"] else "0") != "0"
+        else:
+            rules[key] = _float_arg(ind["param"], ind["default"])
+    return rules
+
+
+# ── GET /screen/indicators ─────────────────────
+@app.route("/screen/indicators", methods=["GET"])
+def screen_indicators():
+    """可用的篩選指標與論文預設門檻（前端用來產生篩選欄位）"""
+    return jsonify(indicator_catalog())
 
 
 def _window_from_args():
@@ -371,8 +381,13 @@ def etf_screen(etf_id):
     fin_years = list(range(fin_end - 4, fin_end + 1))
 
     rows, prices, errors, adjusted_flags, sources = [], {}, [], [], set()
+    excluded_cfg = data.get("excluded_stocks") or {}       # {代號: 原因}，資料有問題、暫不使用的股票
+    excluded = []
     for c in data["constituents"]:
         sid = c["stock_id"]
+        if sid in excluded_cfg:
+            excluded.append({"stock_id": sid, "name": c.get("name"), "reason": excluded_cfg[sid]})
+            continue
         try:
             s, adj, src = get_price_series(sid, start, end, with_source=True)
         except Exception as e:
@@ -396,8 +411,15 @@ def etf_screen(etf_id):
             except Exception as e:
                 app.logger.warning(f"{sid} 財報失敗：{e}")
                 fin = None
+            val = None
+            if needs_valuation(rules):
+                try:
+                    val = get_valuation(sid, start)
+                except Exception as e:
+                    app.logger.warning(f"{sid} 本益比資料失敗：{e}")
             row["fundamentals"]  = fin
-            row["filter"]        = financial_filter(fin, rules)
+            row["valuation"]     = val
+            row["filter"]        = financial_filter(fin, rules, val)
             row["passed_filter"] = row["filter"]["passed"]
         rows.append(row)
 
@@ -425,13 +447,19 @@ def etf_screen(etf_id):
         "price_sources": sorted(x for x in sources if x),
         "filter": {
             "enabled":   use_filter,
-            "rules":     rules,
+            "rules":     [{"key": k, "label": INDICATORS[k]["label"], "group": INDICATORS[k]["group"],
+                           "op": INDICATORS[k].get("op"), "unit": INDICATORS[k].get("unit"),
+                           "kind": INDICATORS[k]["kind"], "threshold": t,
+                           "financial_na": bool(INDICATORS[k].get("financial_na"))}
+                          for k, t in rules.items() if t is not None and t is not False],
+            "valuation_date": "研究開始日前最後一個交易日" if needs_valuation(rules) else None,
             "fin_years": fin_years,
             "passed":    sum(1 for r in rows if r.get("passed_filter", True)),
             "total":     len(rows),
         },
         "rankings": ranked,
         "errors":   errors,
+        "excluded_stocks": excluded,
         "portfolio": {
             "label":   f"前 {top_n} 名等權重",
             "metrics": stock_metrics(port) if not port.empty else {},

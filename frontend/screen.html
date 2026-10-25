@@ -35,6 +35,16 @@
     .chk{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--text-sub);padding:9px 0}
     .chk input{width:16px;height:16px;accent-color:var(--gold)}
     .hint{font-size:.75rem;color:var(--text-muted);margin-top:10px;line-height:1.6}
+    .filter-top{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 20px;margin-bottom:14px}
+    .filter-top .filter-head{margin-bottom:0;flex:1 1 220px}
+    .filter-top .ctl{width:150px}
+    .btn-sm{padding:7px 14px;font-size:.8rem}
+    .ind-group{margin-top:12px}
+    .ind-group-title{font-size:.72rem;font-weight:700;color:var(--gold);letter-spacing:.6px;margin-bottom:8px}
+    .ind-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;align-items:end}
+    .ind-tag{display:block;font-size:.65rem;font-weight:500;color:var(--text-muted);margin-top:2px;letter-spacing:0}
+    .na{color:var(--text-muted);font-size:.75rem}
+    #indicatorGroups.disabled{opacity:.4;pointer-events:none}
     .rank-badge{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-family:var(--font-mono);font-size:.78rem;font-weight:600;background:var(--bg-hover);color:var(--text-sub)}
     tr.selected .rank-badge{background:var(--gold);color:#0D1117}
     .chart-box{position:relative;height:340px}
@@ -111,24 +121,16 @@
       <p class="notice" id="etfNotice" style="display:none"></p>
 
       <div class="filter-card">
-        <label class="filter-head"><input type="checkbox" id="useFilter" checked /> 財務指標篩選（論文 3.3.1）</label>
-        <div class="filter-grid" id="filterGrid">
-          <div class="ctl">
-            <label for="roeMin">ROE 五年平均 ＞（%）</label>
-            <input type="number" id="roeMin" value="10" step="0.5" placeholder="留空 = 不檢查" />
-          </div>
-          <div class="ctl">
-            <label for="gmMin">毛利率五年平均 ＞（%）</label>
-            <input type="number" id="gmMin" value="15" step="0.5" placeholder="留空 = 不檢查" />
-          </div>
-          <div class="ctl">
-            <label class="chk"><input type="checkbox" id="epsPos" checked /> EPS 五年皆為正</label>
-          </div>
+        <div class="filter-top">
+          <label class="filter-head"><input type="checkbox" id="useFilter" checked /> 財務指標篩選（留白 = 不使用該條件）</label>
           <div class="ctl">
             <label for="finEnd">財報最後年度</label>
             <input type="number" id="finEnd" step="1" />
           </div>
+          <button type="button" class="btn btn-outline btn-sm" id="presetThesis">論文預設</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="presetClear">全部清空</button>
         </div>
+        <div id="indicatorGroups"><p class="hint">載入篩選指標中…</p></div>
         <p class="hint" id="filterHint"></p>
       </div>
     </div>
@@ -151,6 +153,7 @@
     let topN = 3;
     let etfMeta = {};
     let screenChart = null;
+    let indicators = [];           // 由後端 /screen/indicators 提供
 
     const pctClass = v => v == null ? "" : (v >= 0 ? "val-good" : "val-bad");
     const pctCell  = v => `<td class="num ${pctClass(v)}">${fmt(v, "pct2")}</td>`;
@@ -180,28 +183,100 @@
       $("finEnd").addEventListener("input", () => { finEndTouched = true; updateFilterHint(); });
       $("startDate").addEventListener("change", () => { syncFinEnd(); showEtfNotice(); });
       $("useFilter").addEventListener("change", () => {
-        $("filterGrid").classList.toggle("disabled", !$("useFilter").checked);
+        $("indicatorGroups").classList.toggle("disabled", !$("useFilter").checked);
         updateFilterHint();
       });
-      syncFinEnd();
+      $("presetThesis").addEventListener("click", () => applyPreset("thesis"));
+      $("presetClear").addEventListener("click", () => applyPreset("clear"));
+      $("indicatorGroups").addEventListener("input", updateFilterHint);
       $("etfSelect").addEventListener("change", showEtfNotice);
+
+      try {
+        indicators = await apiFetch("/screen/indicators");
+        buildIndicatorInputs();
+      } catch (err) {
+        $("indicatorGroups").innerHTML = `<p class="error-msg">無法載入篩選指標：${esc(err.message)}</p>`;
+      }
+      syncFinEnd();
 
       try {
         const etfs = await getEtfs();
         etfs.forEach(e => etfMeta[e.etf_id] = e);
         $("etfSelect").innerHTML = etfs.map(e =>
-          `<option value="${esc(e.etf_id)}">${esc(e.etf_id)} ${esc(e.name)}（${e.count} 檔）</option>`).join("");
+          `<option value="${esc(e.etf_id)}">${esc(e.etf_id.split("@")[0])} ${esc(e.name)}（${e.count} 檔${e.excluded ? `，${e.excluded} 檔暫不使用` : ""}）</option>`).join("");
         showEtfNotice();
       } catch (err) {
         showError("result", `無法連線後端：${err.message}`);
       }
     })();
 
+    // ── 篩選指標欄位 ────────────────────────────
+    const OP_TEXT = { ">": "＞", "<": "＜" };
+
+    function indicatorLabel(ind) {
+      if (ind.kind === "all_positive") return `${ind.label}（五年）`;
+      const when = ind.kind === "point" ? "（開始日前一交易日）" : "五年平均";
+      return `${ind.label} ${when} ${OP_TEXT[ind.op]}（${ind.unit}）`;
+    }
+
+    function buildIndicatorInputs() {
+      const groups = [...new Set(indicators.map(i => i.group))];
+      $("indicatorGroups").innerHTML = groups.map(g => `
+        <div class="ind-group">
+          <div class="ind-group-title">${esc(g)}</div>
+          <div class="ind-grid">
+            ${indicators.filter(i => i.group === g).map(i => {
+              const tag = i.financial_na ? `<span class="ind-tag">金融股自動忽略</span>` : "";
+              if (i.kind === "all_positive")
+                return `<div class="ctl"><label class="chk"><input type="checkbox" data-ind="${i.key}" ${i.default ? "checked" : ""} /> ${esc(indicatorLabel(i))}${tag}</label></div>`;
+              return `<div class="ctl">
+                <label for="ind_${i.key}">${esc(indicatorLabel(i))}${tag}</label>
+                <input type="number" id="ind_${i.key}" data-ind="${i.key}" step="any" placeholder="留白 = 不使用"
+                       value="${i.default ?? ""}" />
+              </div>`;
+            }).join("")}
+          </div>
+        </div>`).join("");
+      updateFilterHint();
+    }
+
+    function applyPreset(kind) {
+      indicators.forEach(i => {
+        const el = document.querySelector(`[data-ind="${i.key}"]`);
+        if (!el) return;
+        if (i.kind === "all_positive") el.checked = kind === "thesis" && !!i.default;
+        else el.value = kind === "thesis" ? (i.default ?? "") : "";
+      });
+      updateFilterHint();
+    }
+
+    function filterParams() {
+      const out = {};
+      indicators.forEach(i => {
+        const el = document.querySelector(`[data-ind="${i.key}"]`);
+        if (!el) return;
+        out[i.param] = i.kind === "all_positive" ? (el.checked ? 1 : 0) : el.value.trim();   // 空字串 = 不使用
+      });
+      return out;
+    }
+
+    function activeIndicatorNames() {
+      return indicators.filter(i => {
+        const el = document.querySelector(`[data-ind="${i.key}"]`);
+        return el && (i.kind === "all_positive" ? el.checked : el.value.trim() !== "");
+      }).map(i => i.label);
+    }
+
     function updateFilterHint() {
       const y = Number($("finEnd").value);
-      $("filterHint").textContent = $("useFilter").checked
-        ? `使用 ${y - 4}～${y} 年財報（共 5 年）。金融股沒有毛利率，目前直接排除；未通過篩選的股票不參與排名。`
-        : "未啟用財務篩選，全部成分股直接依報酬率排序。";
+      if (!$("useFilter").checked) {
+        $("filterHint").textContent = "未啟用財務篩選，全部成分股直接依報酬率排序。";
+        return;
+      }
+      const act = activeIndicatorNames();
+      $("filterHint").textContent =
+        `使用 ${y - 4}～${y} 年財報（共 5 年）。目前使用 ${act.length} 個條件${act.length ? "：" + act.join("、") : "（全部留白，等同不篩選）"}。` +
+        "金融股遇到不適用的指標（毛利率、營業利益率、負債比率、流動比率）自動忽略，其他條件照常檢查。";
     }
 
     function showEtfNotice() {
@@ -229,12 +304,7 @@
         filter: $("useFilter").checked ? 1 : 0,
       };
       if ($("useFilter").checked) {
-        Object.assign(params, {
-          roe_min: $("roeMin").value,          // 空字串 = 不檢查
-          gm_min:  $("gmMin").value,
-          eps_pos: $("epsPos").checked ? 1 : 0,
-          fin_end: $("finEnd").value,
-        });
+        Object.assign(params, filterParams(), { fin_end: $("finEnd").value });
       }
       $("runBtn").disabled = true;
       $("result").innerHTML = `<div class="loading"><div class="spinner"></div>抓取股價與財報、計算中…（第一次約需 1 分鐘）</div>`;
@@ -260,9 +330,15 @@
       const f = d.filter || {};
       if (f.enabled) {
         const y = f.fin_years || [];
-        notices.push(`<p class="notice">財務篩選：${f.passed} / ${f.total} 檔通過（${y[0]}～${y[y.length - 1]} 年財報）。未通過的股票列在表格最下方，並標示原因。</p>`);
+        const ruleText = (f.rules || []).map(r => r.kind === "all_positive" ? r.label
+          : `${r.label} ${OP_TEXT[r.op]} ${r.threshold}${r.unit === "%" ? "%" : " " + r.unit}`).join("、") || "無（全部留白）";
+        const fins = d.rankings.filter(r => r.filter && r.filter.is_financial).length;
+        notices.push(`<p class="notice">財務篩選：${f.passed} / ${f.total} 檔通過（${y[0]}～${y[y.length - 1]} 年財報）。條件：${esc(ruleText)}。` +
+          (fins ? `金融股 ${fins} 檔已自動忽略不適用的指標。` : "") + `未通過的股票列在表格最下方，並標示原因。</p>`);
       }
       if (!names) notices.push(`<p class="notice warn">沒有股票通過篩選，請放寬門檻。</p>`);
+      if ((d.excluded_stocks || []).length) notices.push(`<p class="notice">暫不納入分析：${d.excluded_stocks.map(e =>
+        `${esc(e.name || "")}（${esc(e.stock_id)}）— ${esc(e.reason)}`).join("；")}</p>`);
       if (d.errors.length) notices.push(`<p class="notice warn">以下成分股抓不到股價，未納入排序：${d.errors.map(e => esc(`${e.name || ""}（${e.stock_id}）`)).join("、")}</p>`);
 
       $("result").innerHTML = `
@@ -298,9 +374,9 @@
                 <th>名次</th><th>代號</th><th>名稱</th>
                 <th class="num">期間報酬率</th><th class="num">年化報酬率</th>
                 <th class="num">年化波動率</th><th class="num">夏普值</th><th class="num">最大回檔</th>
-                ${f.enabled ? `<th class="num">ROE 平均</th><th class="num">EPS 最低</th><th class="num">毛利率平均</th><th>篩選</th>` : ""}
+                ${f.enabled ? (f.rules || []).map(r => `<th class="num">${esc(columnLabel(r))}</th>`).join("") + "<th>篩選</th>" : ""}
               </tr></thead>
-              <tbody>${d.rankings.map(r => rowHtml(r, f.enabled)).join("")}</tbody>
+              <tbody>${d.rankings.map(r => rowHtml(r, f.enabled ? (f.rules || []) : null)).join("")}</tbody>
             </table>
           </div>
           <p class="placeholder-text" style="margin-top:12px;font-size:.78rem">
@@ -311,16 +387,25 @@
       drawScreenChart(d);
     }
 
-    function rowHtml(r, withFilter) {
+    function columnLabel(r) {
+      if (r.kind === "all_positive") return "EPS 最低";
+      return r.kind === "point" ? r.label : `${r.label} 平均`;
+    }
+
+    function rowHtml(r, rules) {
       const m = r.metrics || {};
-      const flt = r.filter || {}, v = flt.values || {};
+      const flt = r.filter || {}, v = flt.values || {}, checks = flt.checks || {};
       const cls = r.selected ? "selected" : (r.passed_filter === false ? "excluded" : "");
-      const num = (x, suffix = "") => x == null ? "—" : x.toFixed(2) + suffix;
-      const filterCells = !withFilter ? "" : `
-        <td class="num">${num(v.roe_avg, "%")}</td>
-        <td class="num">${num(v.eps_min)}</td>
-        <td class="num">${num(v.gross_margin_avg, "%")}</td>
-        <td class="${flt.passed ? "pass" : "reason"}">${flt.passed ? "✓ 通過" : esc((flt.reasons || []).join("；") || "未通過")}</td>`;
+      const cell = rule => {
+        if (checks[rule.key] === "skip") return `<td class="num na">不適用</td>`;
+        const x = v[rule.key];
+        if (x == null) return `<td class="num">—</td>`;
+        const unit = rule.kind === "all_positive" ? "" : (rule.unit === "%" ? "%" : "");
+        return `<td class="num ${checks[rule.key] === false ? "val-bad" : ""}">${x.toFixed(2)}${unit}</td>`;
+      };
+      const skipped = (flt.skipped || []).length ? `<span class="w-sub">金融股，忽略${esc(flt.skipped.join("、"))}</span>` : "";
+      const filterCells = !rules ? "" : rules.map(cell).join("") + `
+        <td class="${flt.passed ? "pass" : "reason"}">${flt.passed ? "✓ 通過" : esc((flt.reasons || []).join("；") || "未通過")}${skipped}</td>`;
       return `<tr class="${cls}">
         <td><span class="rank-badge">${r.rank ?? "—"}</span></td>
         <td class="mono">${esc(r.stock_id)}</td>

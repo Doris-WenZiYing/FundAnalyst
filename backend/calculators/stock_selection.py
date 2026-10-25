@@ -26,13 +26,39 @@ SORT_KEYS = {
     "mdd":               ("最大回檔",   True),   # MDD 為負值，越接近 0 越好
 }
 
-# 論文 3.3.1 的三個門檻
-THESIS_RULES = {
-    "roe_avg_min":          10.0,   # ROE 五年平均 > 10%
-    "eps_all_positive":     True,   # EPS 連續五年 > 0
-    "gross_margin_avg_min": 15.0,   # 毛利率五年平均 > 15%
-    "exclude_financials":   True,   # 金融股沒有毛利率，先排除（之後再跟教授確認）
+# ── 財務篩選指標（論文表 1：盈餘能力、價值評估、財務穩健，加上成長性）──
+# kind：avg = 五年平均；all_positive = 五年每年都 > 0；point = 研究開始日前一交易日的數值
+# op  ：">" 越大越好（門檻為下限）、"<" 越小越好（門檻為上限）
+# financial_na：金融股不適用（沒有毛利、營業利益、流動資產負債分類），篩選時自動忽略
+# default：論文預設門檻；None = 預設不使用（留白）
+INDICATORS = {
+    "roe":              dict(label="ROE",        group="盈餘能力", kind="avg", op=">", unit="%", param="roe_min",  default=10.0),
+    "roa":              dict(label="ROA",        group="盈餘能力", kind="avg", op=">", unit="%", param="roa_min",  default=None),
+    "eps_positive":     dict(label="EPS 每年為正", group="盈餘能力", kind="all_positive", source="eps", param="eps_pos", default=True),
+    "gross_margin":     dict(label="毛利率",      group="盈餘能力", kind="avg", op=">", unit="%", param="gm_min",   default=15.0, financial_na=True),
+    "operating_margin": dict(label="營業利益率",   group="盈餘能力", kind="avg", op=">", unit="%", param="opm_min",  default=None, financial_na=True),
+    "net_margin":       dict(label="稅後淨利率",   group="盈餘能力", kind="avg", op=">", unit="%", param="npm_min",  default=None),
+    "debt_ratio":       dict(label="負債比率",     group="財務穩健", kind="avg", op="<", unit="%", param="debt_max", default=None, financial_na=True),
+    "current_ratio":    dict(label="流動比率",     group="財務穩健", kind="avg", op=">", unit="%", param="cr_min",   default=None, financial_na=True),
+    "revenue_growth":   dict(label="營收成長率",   group="成長性",   kind="avg", op=">", unit="%", param="revg_min", default=None),
+    "eps_growth":       dict(label="EPS 成長率",  group="成長性",   kind="avg", op=">", unit="%", param="epsg_min", default=None, partial=True),
+    "per":              dict(label="本益比",       group="價值評估", kind="point", op="<", unit="倍", param="per_max", default=None),
+    "pbr":              dict(label="股價淨值比",   group="價值評估", kind="point", op="<", unit="倍", param="pbr_max", default=None),
+    "dividend_yield":   dict(label="現金殖利率",   group="價值評估", kind="point", op=">", unit="%", param="dy_min",  default=None),
 }
+
+# 論文 3.3.1 的三個條件
+THESIS_RULES = {k: v["default"] for k, v in INDICATORS.items()}
+
+
+def indicator_catalog() -> List[Dict]:
+    """給前端產生篩選欄位用"""
+    return [{"key": k, **{f: v.get(f) for f in ("label", "group", "kind", "op", "unit", "param", "default")},
+             "financial_na": bool(v.get("financial_na"))} for k, v in INDICATORS.items()]
+
+
+def needs_valuation(rules: Dict) -> bool:
+    return any(rules.get(k) is not None for k, v in INDICATORS.items() if v["kind"] == "point")
 
 
 def _r(v, n=4):
@@ -133,72 +159,85 @@ def to_normalized_points(s: pd.Series) -> List[Dict]:
             for d, v in s.items()]
 
 
-# ── 財務指標篩選（論文 3.3.1）────────────────────
-RULE_LABELS = {
-    "not_financial":    "非金融股",
-    "complete":         "財報年度完整",
-    "roe_avg":          "ROE 平均",
-    "eps_all_positive": "EPS 每年為正",
-    "gross_margin_avg": "毛利率平均",
-}
+# ── 財務指標篩選 ─────────────────────────────────
+def _fmt(v, unit):
+    return f"{v:.1f}{unit}" if unit == "%" else f"{v:.2f} {unit}"
 
 
-def financial_filter(fin: Optional[Dict], rules: Optional[Dict] = None) -> Dict:
+def financial_filter(fin: Optional[Dict], rules: Optional[Dict] = None,
+                     valuation: Optional[Dict] = None) -> Dict:
     """
-    fin：financials.get_fundamentals() 的結果
-         {"years": [...], "roe": [...%], "eps": [...], "gross_margin": [...%], "is_financial": bool}
-    rules：覆蓋 THESIS_RULES 的門檻；值設為 None / False 代表不檢查該條件
-    回傳 {"passed", "checks": {規則: bool}, "reasons": [未通過原因], "values": {...}}
-    fin 為 None（抓不到財報）時視為未通過。
+    fin       ：financials.get_fundamentals() 的結果（各指標五年數列）
+    rules     ：{指標: 門檻}；None / False = 不使用（留白）。未給的指標用 THESIS_RULES
+    valuation ：financials.get_valuation() 的結果（本益比等）
+    回傳 {"passed", "checks": {指標: True/False/"skip"}, "reasons": [...], "values": {指標: 數值}}
+
+    - 金融股遇到 financial_na 的指標自動忽略（checks 記為 "skip"）
+    - 五年平均類指標，任一年缺資料視為未通過（論文要求連續五年）；EPS 成長率例外，
+      前一年 EPS ≤ 0 的年度本來就無法計算，有算得出來的年度即可
     """
-    rules = {**THESIS_RULES, **(rules or {})}
-    if not fin:
+    rules  = {**THESIS_RULES, **(rules or {})}
+    active = {k: t for k, t in rules.items() if k in INDICATORS and t is not None and t is not False}
+    is_fin = bool(fin and fin.get("is_financial"))
+    checks, reasons, values = {}, [], {}
+
+    if not fin and any(INDICATORS[k]["kind"] != "point" for k in active):
         return {"passed": False, "checks": {}, "reasons": ["抓不到財報資料"], "values": {}}
 
-    def avg(xs):
-        xs = [x for x in (xs or []) if x is not None]
-        return sum(xs) / len(xs) if xs else None
+    n_years = len((fin or {}).get("years") or []) or 5
+    missing = []                                  # 財報不足的指標，最後合併成一句原因
+    for key, threshold in active.items():
+        ind = INDICATORS[key]
+        if is_fin and ind.get("financial_na"):
+            checks[key] = "skip"
+            continue
 
-    roe, eps, gm = fin.get("roe") or [], fin.get("eps") or [], fin.get("gross_margin") or []
-    roe_avg, gm_avg = avg(roe), avg(gm)
-    eps_vals = [x for x in eps if x is not None]
-    is_fin   = bool(fin.get("is_financial"))
-    n_years  = len(fin.get("years") or [])
+        if ind["kind"] == "all_positive":
+            xs = (fin or {}).get(ind["source"]) or []
+            vals = [x for x in xs if x is not None]
+            values[key] = _r(min(vals), 2) if vals else None
+            if len(vals) < len(xs) or not vals:
+                checks[key] = False
+                missing.append(ind["label"].split(" ")[0])
+            else:
+                checks[key] = all(x > 0 for x in vals)
+                if not checks[key]:
+                    reasons.append("EPS 有虧損年度")
+            continue
 
-    checks, reasons = {}, []
-    if rules.get("exclude_financials", True):
-        checks["not_financial"] = not is_fin
-        if is_fin:
-            reasons.append("金融股（無毛利率，依論文設計排除）")
+        if ind["kind"] == "point":
+            v = (valuation or {}).get(key)
+            values[key] = _r(v, 2)
+            if v is None:
+                checks[key] = False
+                reasons.append(f"無{ind['label']}資料" + ("（虧損）" if key == "per" else ""))
+                continue
+        else:
+            xs = (fin or {}).get(key) or []
+            vals = [x for x in xs if x is not None]
+            v = sum(vals) / len(vals) if vals else None
+            values[key] = _r(v, 2)
+            complete = bool(vals) if ind.get("partial") else (bool(xs) and len(vals) == len(xs))
+            if not complete:
+                checks[key] = False
+                missing.append(ind["label"])
+                continue
 
-    # 論文要求「連續五年」，任何一年缺 ROE 或 EPS 就算資料不完整
-    complete = n_years > 0 and all(x is not None for x in roe + eps)
-    if not is_fin:
-        complete = complete and all(x is not None for x in gm)
-    checks["complete"] = complete
-    if not complete and not is_fin:
-        reasons.append(f"財報不足 {n_years} 年")
+        ok = v > threshold if ind["op"] == ">" else v < threshold
+        checks[key] = ok
+        if not ok:
+            sign = "≤" if ind["op"] == ">" else "≥"
+            prefix = "" if ind["kind"] == "point" else "平均 "
+            reasons.append(f"{ind['label']} {prefix}{_fmt(v, ind['unit'])} {sign} {_fmt(float(threshold), ind['unit'])}")
 
-    if rules.get("roe_avg_min") is not None:
-        ok = roe_avg is not None and roe_avg > rules["roe_avg_min"]
-        checks["roe_avg"] = ok
-        if not ok and roe_avg is not None:
-            reasons.append(f"ROE 平均 {roe_avg:.1f}% ≤ {rules['roe_avg_min']:g}%")
-    if rules.get("eps_all_positive"):
-        ok = bool(eps_vals) and all(x > 0 for x in eps_vals)
-        checks["eps_all_positive"] = ok
-        if not ok and eps_vals:
-            reasons.append("EPS 有虧損年度")
-    if rules.get("gross_margin_avg_min") is not None and not is_fin:
-        ok = gm_avg is not None and gm_avg > rules["gross_margin_avg_min"]
-        checks["gross_margin_avg"] = ok
-        if not ok and gm_avg is not None:
-            reasons.append(f"毛利率平均 {gm_avg:.1f}% ≤ {rules['gross_margin_avg_min']:g}%")
+    if missing:
+        reasons.insert(0, f"財報不足 {n_years} 年（{'、'.join(missing)}）")
 
     return {
-        "passed":  all(checks.values()),
-        "checks":  checks,
-        "reasons": reasons,
-        "values":  {"roe_avg": _r(roe_avg, 2), "gross_margin_avg": _r(gm_avg, 2),
-                    "eps_min": _r(min(eps_vals), 2) if eps_vals else None},
+        "passed":       all(c is True for c in checks.values() if c != "skip"),
+        "checks":       checks,
+        "skipped":      [INDICATORS[k]["label"] for k, c in checks.items() if c == "skip"],
+        "reasons":      reasons,
+        "values":       values,
+        "is_financial": is_fin,
     }
