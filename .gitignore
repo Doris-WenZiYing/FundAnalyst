@@ -41,3 +41,4 @@ backend/scraper/cache/price_*.json
 backend/scraper/cache/fin_*.json
 __pycache__/
 .pytest_cache/
+backend/picks/
